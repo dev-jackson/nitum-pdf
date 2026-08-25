@@ -57,7 +57,7 @@ xvfb-run -a $venv/bin/python scripts/demo_sign.py /tmp/contrato.pdf /tmp/demo \
     --appearance=/tmp/nitum-demo-signature.png 2>/dev/null | grep -E "^firmado|^nivel|Sig1|tras confiar"
 xvfb-run -a $venv/bin/python scripts/screenshot.py /tmp/contrato.pdf /out \
     --signed=/tmp/demo/contrato-firmado.pdf --appearance=/tmp/nitum-demo-signature.png \
-    viewer signature-center placing sign status signed \
+    empty viewer narrow search signature-center placing sign status signed dark \
     2>&1 | grep -cE "^wrote" | sed 's/^/### screenshots: /'
 echo "### desktop entry: $(test -f /usr/share/applications/org.pwview.PdfViewer.desktop && echo present)"
 timeout 8 xvfb-run -a nitum-pdf /tmp/contrato.pdf >/dev/null 2>&1 && echo "### launcher exited cleanly" || echo "### launcher ran until timeout (window stayed open) = ok"

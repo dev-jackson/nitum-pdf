@@ -161,6 +161,7 @@ class ViewerWindow(Adw.ApplicationWindow):
             icon_name="document-open-symbolic",
             title=S.EMPTY_TITLE, description=S.EMPTY_BODY,
         )
+        self.empty.add_css_class("welcome-page")
         open_button = Gtk.Button(label=S.OPEN, halign=Gtk.Align.CENTER,
                                  css_classes=["suggested-action", "pill"])
         open_button.connect("clicked", lambda *_: self.choose_file())
@@ -173,11 +174,16 @@ class ViewerWindow(Adw.ApplicationWindow):
 
         self.search_bar, self.search_entry = self._build_search()
 
+        self.document_controls = self._build_document_controls()
+        document_surface = Gtk.Overlay()
+        document_surface.set_child(self.stack)
+        document_surface.add_overlay(self.document_controls)
+
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         content.append(self.signature_banner)
         content.append(self.banner)
         content.append(self.search_bar)
-        content.append(self.stack)
+        content.append(document_surface)
         self.toasts.set_child(content)
 
         self.set_content(compat.toolbar_view(self._build_header(), self.toasts))
@@ -186,6 +192,8 @@ class ViewerWindow(Adw.ApplicationWindow):
         self._install_css()
         self._install_drop_target()
         self._update_chrome()
+        self.connect("map", lambda *_: GLib.idle_add(self._on_resize))
+        self.connect("notify::width", lambda *_: self._adapt_header())
 
         if path:
             self.open_document(Path(path))
@@ -194,12 +202,36 @@ class ViewerWindow(Adw.ApplicationWindow):
 
     def _build_header(self) -> Adw.HeaderBar:
         header = Adw.HeaderBar()
+        header.add_css_class("app-header")
 
         open_button = Gtk.Button(icon_name="document-open-symbolic",
                                  tooltip_text=S.OPEN_TOOLTIP)
         open_button.connect("clicked", lambda *_: self.choose_file())
         header.pack_start(open_button)
 
+        self.sign_button = Gtk.Button(label=S.SIGN, tooltip_text=S.SIGN_TOOLTIP,
+                                      css_classes=["suggested-action", "pill"])
+        self.sign_button.connect("clicked", lambda *_: self.show_signature_center())
+        header.pack_end(self.sign_button)
+
+        menu = Gio.Menu()
+        menu.append(S.VERIFY, "win.verify")
+        menu.append(S.FIT_WIDTH, "win.fit-width")
+        menu.append(S.COPY_TEXT, "win.copy-text")
+        menu.append(S.IMPORT_IDENTITY, "win.import-identity")
+        menu.append(S.CHECK_UPDATES, "win.check-updates")
+        self.menu_button = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu,
+                                          tooltip_text=S.MORE_OPTIONS)
+        header.pack_end(self.menu_button)
+
+        self.search_button = Gtk.ToggleButton(icon_name="edit-find-symbolic",
+                                              tooltip_text=S.SEARCH_TOOLTIP)
+        self.search_button.connect("toggled", self._toggle_search)
+        header.pack_end(self.search_button)
+        return header
+
+    def _build_document_controls(self) -> Gtk.Widget:
+        """Keep navigation near the document and let the header stay calm."""
         self.page_entry = Gtk.Entry(
             width_chars=3, max_width_chars=3, xalign=0.5, hexpand=False,
             input_purpose=Gtk.InputPurpose.DIGITS,
@@ -209,7 +241,10 @@ class ViewerWindow(Adw.ApplicationWindow):
         self.pager = Gtk.Box(spacing=6, valign=Gtk.Align.CENTER, hexpand=False)
         self.pager.append(self.page_entry)
         self.pager.append(self.page_total)
-        header.pack_start(self.pager)
+        page_label = Gtk.Label(label=S.PAGE_LABEL, css_classes=["dim-label", "caption"])
+        pager_group = Gtk.Box(spacing=6, valign=Gtk.Align.CENTER)
+        pager_group.append(page_label)
+        pager_group.append(self.pager)
 
         zoom = Gtk.Box(css_classes=["linked"])
         for icon, delta, tip in (
@@ -224,26 +259,12 @@ class ViewerWindow(Adw.ApplicationWindow):
         self.zoom_label.connect("clicked", lambda *_: self.apply_fit_width())
         zoom.append(self.zoom_label)
         self.zoom_box = zoom
-        header.pack_start(zoom)
-
-        self.sign_button = Gtk.Button(label=S.SIGN, tooltip_text=S.SIGN_TOOLTIP,
-                                      css_classes=["suggested-action"])
-        self.sign_button.connect("clicked", lambda *_: self.show_signature_center())
-        header.pack_end(self.sign_button)
-
-        menu = Gio.Menu()
-        menu.append(S.VERIFY, "win.verify")
-        menu.append(S.FIT_WIDTH, "win.fit-width")
-        menu.append(S.COPY_TEXT, "win.copy-text")
-        menu.append(S.IMPORT_IDENTITY, "win.import-identity")
-        menu.append(S.CHECK_UPDATES, "win.check-updates")
-        self.menu_button = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu)
-        header.pack_end(self.menu_button)
-
-        self.search_button = Gtk.ToggleButton(icon_name="edit-find-symbolic")
-        self.search_button.connect("toggled", self._toggle_search)
-        header.pack_end(self.search_button)
-        return header
+        controls = Gtk.Box(spacing=10, valign=Gtk.Align.END, halign=Gtk.Align.CENTER,
+                           margin_bottom=18, css_classes=["document-controls"])
+        controls.append(pager_group)
+        controls.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+        controls.append(zoom)
+        return controls
 
     def _build_search(self):
         entry = Gtk.SearchEntry(placeholder_text=S.SEARCH_PLACEHOLDER, width_chars=32)
@@ -261,7 +282,8 @@ class ViewerWindow(Adw.ApplicationWindow):
         arrows.append(previous)
         arrows.append(following)
 
-        row = Gtk.Box(spacing=8)
+        row = Gtk.Box(spacing=8, halign=Gtk.Align.CENTER,
+                      margin_top=6, margin_bottom=6)
         row.append(entry)
         row.append(self.hit_label)
         row.append(arrows)
@@ -273,8 +295,26 @@ class ViewerWindow(Adw.ApplicationWindow):
     def _install_css(self) -> None:
         provider = Gtk.CssProvider()
         compat.load_css(provider, """
-        .page-shadow { background: #ffffff;
-            box-shadow: 0 1px 3px rgba(0,0,0,.28), 0 6px 18px rgba(0,0,0,.14); }
+        window { background: #f4f5f7; }
+        .app-header { background: alpha(@window_bg_color, .94); }
+        .welcome-page > box { margin-bottom: 72px; }
+        .page-shadow { background: #ffffff; border-radius: 2px;
+            box-shadow: 0 1px 2px rgba(20,24,35,.16), 0 12px 38px rgba(20,24,35,.12); }
+        .document-controls { background: alpha(@window_bg_color, .96);
+            border: 1px solid alpha(currentColor, .12); border-radius: 16px;
+            padding: 6px 8px; box-shadow: 0 8px 24px rgba(20,24,35,.18); }
+        .document-controls entry { min-height: 30px; border-radius: 9px; }
+        .document-controls separator { margin: 4px 2px; }
+        .dialog-lead { margin-bottom: 4px; }
+        .intent-row image { color: @accent_color; }
+        .intent-row { transition: 150ms ease; }
+        .intent-row:hover { background: alpha(@accent_color, .055); }
+        .security-note { background: alpha(@accent_color, .07);
+            border-radius: 10px; padding: 10px 12px; }
+        .status-summary { border-radius: 12px; padding: 12px 14px; }
+        .status-summary.success { background: alpha(#1a7f37, .10); }
+        .status-summary.warning { background: alpha(#9a6700, .11); }
+        .status-summary.error { background: alpha(#b42318, .10); }
         .success { color: #1a7f37; }
         .warning { color: #9a6700; }
         .error   { color: #b42318; }
@@ -402,7 +442,17 @@ class ViewerWindow(Adw.ApplicationWindow):
         self._update_chrome()
         # Refit after GTK has assigned the scroller its real width.
         GLib.idle_add(self._on_resize)
+        GLib.timeout_add(120, lambda: (self._on_resize(), False)[1])
+        # Theme negotiation can change the scroller allocation after the first
+        # frame (notably when launching directly in dark mode).
+        GLib.timeout_add(500, lambda: (self._on_resize(), False)[1])
         self._refresh_signature_banner()
+
+    def _adapt_header(self) -> None:
+        """Preserve the primary action without crowding narrow windows."""
+        compact = self.get_width() < 720
+        self.sign_button.set_label("" if compact else S.SIGN)
+        self.sign_button.set_icon_name("document-edit-symbolic" if compact else None)
 
     def _ask_password(self, path: Path, wrong: bool = False) -> None:
         entry = Gtk.PasswordEntry(show_peek_icon=True, activates_default=True,
@@ -470,7 +520,10 @@ class ViewerWindow(Adw.ApplicationWindow):
     def _preferred_scale(self) -> float:
         if not self.fit_width or self.document is None:
             return self.scale
-        width = max(320, self.scroller.get_width() - 48)
+        # The scroller can briefly report its minimum allocation while a theme
+        # is being applied. The window width is the reliable upper bound because
+        # this surface always spans the window.
+        width = max(320, self.scroller.get_width() - 48, self.get_width() - 48)
         return self.document.scale_to_fit_width(0, width)
 
     def _apply_scale(self, scale: float) -> None:
@@ -487,6 +540,7 @@ class ViewerWindow(Adw.ApplicationWindow):
         GLib.idle_add(self._paint_hits)
 
     def _on_resize(self) -> None:
+        self._adapt_header()
         if self.document and self.fit_width:
             new_scale = self._preferred_scale()
             if abs(new_scale - self.scale) > 0.01:
@@ -774,8 +828,7 @@ class ViewerWindow(Adw.ApplicationWindow):
         has_document = self.document is not None
         for widget in (self.sign_button, self.search_button):
             widget.set_sensitive(has_document)
-        for widget in (self.pager, self.zoom_box):
-            widget.set_visible(has_document)
+        self.document_controls.set_visible(has_document)
         if has_document:
             self.zoom_label.set_label(S.ZOOM_LABEL.format(percent=round(self.scale * 100)))
         self.stack.set_visible_child_name("pages" if has_document else "empty")
@@ -788,15 +841,17 @@ class SignatureCenterDialog:
         self.window = window
         self.dialog = compat.Dialog(S.SIGN_CENTER_TITLE, width=560)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
-                      margin_top=18, margin_bottom=18, margin_start=18, margin_end=18)
+                      margin_top=20, margin_bottom=20, margin_start=22, margin_end=22)
         box.append(Gtk.Label(label=S.SIGN_CENTER_HEADING, xalign=0,
-                             css_classes=["title-2"]))
-        box.append(Gtk.Label(label=S.SIGN_CENTER_BODY, xalign=0, wrap=True))
+                             css_classes=["title-1", "dialog-lead"]))
+        box.append(Gtk.Label(label=S.SIGN_CENTER_BODY, xalign=0, wrap=True,
+                             css_classes=["dim-label"]))
 
         group = Adw.PreferencesGroup()
         sign = Adw.ActionRow(title=S.SIGN_MY_DOCUMENT,
-                             subtitle=S.SIGN_MY_DOCUMENT_BODY)
-        sign.add_prefix(Gtk.Image(icon_name="document-edit-symbolic"))
+                             subtitle=S.SIGN_MY_DOCUMENT_BODY,
+                             css_classes=["intent-row"])
+        sign.add_prefix(Gtk.Image(icon_name="document-edit-symbolic", pixel_size=20))
         sign_button = Gtk.Button(label=S.CONTINUE, valign=Gtk.Align.CENTER,
                                  css_classes=["suggested-action"])
         sign_button.connect("clicked", self._sign)
@@ -804,16 +859,18 @@ class SignatureCenterDialog:
         group.add(sign)
 
         verify = Adw.ActionRow(title=S.SIGN_REVIEW_DOCUMENT,
-                               subtitle=S.SIGN_REVIEW_DOCUMENT_BODY)
-        verify.add_prefix(Gtk.Image(icon_name="security-high-symbolic"))
+                               subtitle=S.SIGN_REVIEW_DOCUMENT_BODY,
+                               css_classes=["intent-row"])
+        verify.add_prefix(Gtk.Image(icon_name="security-high-symbolic", pixel_size=20))
         verify_button = Gtk.Button(label=S.CHECK, valign=Gtk.Align.CENTER)
         verify_button.connect("clicked", self._verify)
         verify.add_suffix(verify_button)
         group.add(verify)
 
         visual = Adw.ActionRow(title=S.SIGN_SAVE_APPEARANCE,
-                               subtitle=S.SIGN_SAVE_APPEARANCE_BODY)
-        visual.add_prefix(Gtk.Image(icon_name="insert-image-symbolic"))
+                               subtitle=S.SIGN_SAVE_APPEARANCE_BODY,
+                               css_classes=["intent-row"])
+        visual.add_prefix(Gtk.Image(icon_name="insert-image-symbolic", pixel_size=20))
         visual_button = Gtk.Button(
             label=S.SIGN_CHANGE if appearances.saved() else S.SIGN_ADD,
             valign=Gtk.Align.CENTER,
@@ -823,7 +880,7 @@ class SignatureCenterDialog:
         group.add(visual)
         box.append(group)
         box.append(Gtk.Label(label=S.SIGN_VISUAL_NOTE, xalign=0, wrap=True,
-                             css_classes=["dim-label", "caption"]))
+                             css_classes=["dim-label", "caption", "security-note"]))
         self.dialog.set_child(compat.toolbar_view(Adw.HeaderBar(), box))
 
     def present(self, parent) -> None:
@@ -889,11 +946,16 @@ class SignDialog:
         self.can_certify = bool(window.path and signing.signature_count(window.path) == 0)
         self.certify_row.set_visible(self.can_certify)
 
-        group = Adw.PreferencesGroup()
-        for row in (self.identity_row, self.secret_row, self.appearance_row,
-                    self.reason_row, self.location_row, self.strong_row,
-                    self.certify_row):
-            group.add(row)
+        identity_group = Adw.PreferencesGroup(title=S.SIGN_GROUP_IDENTITY)
+        for row in (self.identity_row, self.secret_row, self.appearance_row):
+            identity_group.add(row)
+        details_group = Adw.PreferencesGroup(title=S.SIGN_GROUP_DETAILS,
+                                             description=S.SIGN_GROUP_DETAILS_BODY)
+        for row in (self.reason_row, self.location_row):
+            details_group.add(row)
+        protection_group = Adw.PreferencesGroup(title=S.SIGN_GROUP_PROTECTION)
+        for row in (self.strong_row, self.certify_row):
+            protection_group.add(row)
 
         sign_button = Gtk.Button(label=S.SIGN_BUTTON, css_classes=["suggested-action"])
         sign_button.connect("clicked", self._submit)
@@ -901,13 +963,15 @@ class SignDialog:
         header = Adw.HeaderBar(show_end_title_buttons=False)
         header.pack_end(sign_button)
 
-        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
-                       margin_top=12, margin_bottom=18, margin_start=18, margin_end=18)
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
+                       margin_top=16, margin_bottom=22, margin_start=22, margin_end=22)
         page.append(Gtk.Label(label=S.SIGN_STEP_TWO, xalign=0,
                               css_classes=["title-3"]))
         page.append(Gtk.Label(label=S.SIGN_CONFIRM_BODY, xalign=0, wrap=True,
                               css_classes=["dim-label"]))
-        page.append(group)
+        page.append(identity_group)
+        page.append(details_group)
+        page.append(protection_group)
         self.dialog.set_child(compat.toolbar_view(header, page))
 
     def present(self, parent) -> None:
@@ -994,7 +1058,7 @@ class StatusDialog:
             text = S.SUMMARY_ALL_GOOD.format(
                 count=S.signature_count(len(statuses)))
             css, icon = "success", "object-select-symbolic"
-        row = Gtk.Box(spacing=10)
+        row = Gtk.Box(spacing=10, css_classes=["status-summary", css])
         row.append(Gtk.Image(icon_name=icon, css_classes=[css], pixel_size=20))
         row.append(Gtk.Label(label=text, xalign=0, wrap=True, css_classes=["heading"]))
         return row

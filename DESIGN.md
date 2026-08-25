@@ -5,21 +5,20 @@ La pregunta de control para cada pantalla es:
 > ¿Una persona que viene de Acrobat entiende qué puede hacer, qué ocurrirá y
 > cuál es el siguiente paso sin conocer certificados?
 
-## Referentes, no imitaciones
+## Referentes principales, no imitaciones
 
 - **Adobe Acrobat:** separar firma visual, firma digital, certificación y
   validación; conservar el modelo mental de colocar y luego confirmar.
 - **Linear:** el documento recibe el mayor peso visual; navegación y opciones
-  secundarias retroceden. La interfaz muestra solo lo necesario para la tarea.
-- **Notion:** lo frecuente funciona con el ratón y con atajos previsibles. Las
-  opciones avanzadas aparecen después, sin bloquear el inicio.
-- **Figma:** las herramientas aparecen en el contexto donde actúan. La guía para
-  colocar una firma vive sobre el documento y desaparece al terminar.
-- **Stripe:** los estados de seguridad se explican en lenguaje concreto y
-  accionable; integridad e identidad nunca se fusionan en una marca verde vaga.
-- **Apple:** el nivel de interrupción corresponde al riesgo; estado persistente
-  en banners, confirmaciones para acciones importantes y color acompañado de
-  icono y texto.
+  secundarias retroceden. Menos bordes, iconos más discretos y una jerarquía que
+  se percibe sin convertir cada sección en una caja.
+- **Apple:** controles nativos, alineación consistente, adaptación al tamaño de
+  ventana y divulgación progresiva. El color siempre se acompaña de icono y texto.
+- **Stripe:** los pasos sensibles explican en lenguaje concreto qué va a pasar,
+  separan los datos por función y ofrecen una sola acción principal inequívoca.
+
+Notion y Figma se conservan como referencias secundarias para atajos previsibles
+y herramientas que aparecen en el contexto donde actúan.
 
 ## Reglas verificables
 
