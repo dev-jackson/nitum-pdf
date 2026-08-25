@@ -12,6 +12,9 @@ apt-get install -y -qq python3-venv python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 \
     python3-pytest tzdata >/dev/null 2>&1
 
 mkdir -p /work /out && cp -r /src /work/pw-view-pdf && cd /work/pw-view-pdf
+# Never mix host artifacts (possibly built for another architecture) with the
+# package this container is about to verify.
+rm -rf /work/pw-view-pdf/build /work/pw-view-pdf/dist
 
 python3 - <<'PY'
 import gi
@@ -43,8 +46,18 @@ xvfb-run -a $venv/bin/python -m pytest -q 2>&1 | tail -3
 
 echo "### launching the app headless and capturing the window"
 $venv/bin/python scripts/make_sample.py /tmp/contrato.pdf >/dev/null
-xvfb-run -a $venv/bin/python scripts/demo_sign.py /tmp/contrato.pdf /tmp/demo 2>/dev/null | grep -E "^firmado|^nivel|Sig1|tras confiar"
+$venv/bin/python - <<'PY'
+from PIL import Image, ImageDraw
+image = Image.new("RGBA", (600, 180), (255, 255, 255, 0))
+draw = ImageDraw.Draw(image)
+draw.line((20, 125, 180, 75, 300, 120, 560, 35), fill="#123f91", width=10, joint="curve")
+image.save("/tmp/nitum-demo-signature.png")
+PY
+xvfb-run -a $venv/bin/python scripts/demo_sign.py /tmp/contrato.pdf /tmp/demo \
+    --appearance=/tmp/nitum-demo-signature.png 2>/dev/null | grep -E "^firmado|^nivel|Sig1|tras confiar"
 xvfb-run -a $venv/bin/python scripts/screenshot.py /tmp/contrato.pdf /out \
-    --signed=/tmp/demo/contrato-firmado.pdf viewer sign status signed 2>&1 | grep -cE "^wrote" | sed 's/^/### screenshots: /'
+    --signed=/tmp/demo/contrato-firmado.pdf --appearance=/tmp/nitum-demo-signature.png \
+    viewer signature-center placing sign status signed \
+    2>&1 | grep -cE "^wrote" | sed 's/^/### screenshots: /'
 echo "### desktop entry: $(test -f /usr/share/applications/org.pwview.PdfViewer.desktop && echo present)"
 timeout 8 xvfb-run -a nitum-pdf /tmp/contrato.pdf >/dev/null 2>&1 && echo "### launcher exited cleanly" || echo "### launcher ran until timeout (window stayed open) = ok"

@@ -1,7 +1,7 @@
 """Render the UI to PNG so its look can be reviewed without a human at the screen.
 
 Usage: python scripts/screenshot.py <sample.pdf> <out-dir> [scene ...]
-Scenes: empty, viewer, placing, sign, status
+Scenes: empty, viewer, signature-center, placing, sign, status
 """
 
 from __future__ import annotations
@@ -17,8 +17,10 @@ from gi.repository import Adw, Gdk, GLib, Gsk, Gtk  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from pwviewpdf import identities, signing  # noqa: E402
-from pwviewpdf.app import PwViewPdf, SignDialog, StatusDialog, ViewerWindow  # noqa: E402
+from pwviewpdf import appearances, identities, signing  # noqa: E402
+from pwviewpdf.app import (  # noqa: E402
+    PwViewPdf, SignDialog, SignatureCenterDialog, StatusDialog, ViewerWindow,
+)
 
 FAKE_IDENTITIES = [
     identities.Identity(kind="pkcs11", label="DNIe (OpenSC)",
@@ -62,8 +64,14 @@ def main() -> int:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     signed = next((Path(a.split("=", 1)[1]) for a in sys.argv[1:]
                    if a.startswith("--signed=")), None)
+    appearance = next((Path(a.split("=", 1)[1]) for a in sys.argv[1:]
+                       if a.startswith("--appearance=")), None)
+    if appearance is not None:
+        appearances.SIGNATURE_IMAGE = appearance
     sample, out_dir = Path(args[0]), Path(args[1])
-    scenes = args[2:] or ["empty", "viewer", "placing", "sign", "status", "search"]
+    scenes = args[2:] or [
+        "empty", "viewer", "signature-center", "placing", "sign", "status", "search",
+    ]
     out_dir.mkdir(parents=True, exist_ok=True)
 
     app = PwViewPdf()
@@ -78,7 +86,9 @@ def main() -> int:
                 window.show_verification()
             return
         window.open_document(sample)
-        if name == "placing":
+        if name == "signature-center":
+            SignatureCenterDialog(window).present(window)
+        elif name == "placing":
             window.start_signing()
             page = window._pages[0]
             page.rect = (60, 330, 250, 390)
