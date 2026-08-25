@@ -1,7 +1,7 @@
 """Render the UI to PNG so its look can be reviewed without a human at the screen.
 
 Usage: python scripts/screenshot.py <sample.pdf> <out-dir> [scene ...]
-Scenes: empty, viewer, signature-center, placing, sign, status
+Scenes: empty, viewer, narrow, signature-center, placing, sign, status, search, dark
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ def main() -> int:
         appearances.SIGNATURE_IMAGE = appearance
     sample, out_dir = Path(args[0]), Path(args[1])
     scenes = args[2:] or [
-        "empty", "viewer", "signature-center", "placing", "sign", "status", "search",
+        "empty", "viewer", "signature-center", "placing", "sign", "status", "search", "dark",
     ]
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -86,6 +86,9 @@ def main() -> int:
                 window.show_verification()
             return
         window.open_document(sample)
+        if name == "narrow":
+            window.set_default_size(640, 760)
+            return
         if name == "signature-center":
             SignatureCenterDialog(window).present(window)
         elif name == "placing":
@@ -109,6 +112,8 @@ def main() -> int:
             app.quit()
             return False
         name = steps.pop(0)
+        if name == "dark":
+            Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK)
         window = ViewerWindow(app)
         window.present()
         build_scene(name, window)
@@ -122,7 +127,9 @@ def main() -> int:
             GLib.timeout_add(200, run_next)
             return False
 
-        GLib.timeout_add(900, shoot)
+        # A forced color-scheme change causes a second style/layout pass in GTK.
+        # Capture after that pass so the image represents the settled UI.
+        GLib.timeout_add(1600 if name == "dark" else 900, shoot)
         return False
 
     def on_activate(_app):
