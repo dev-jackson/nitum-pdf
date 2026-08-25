@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nitum-pdf"
-version = "0.2.1"
+version = "0.3.0"
 description = "Nitum PDF: visor y firmador de PDF simple, seguro y pensado para Linux"
 requires-python = ">=3.10"
 license = { text = "MIT" }
