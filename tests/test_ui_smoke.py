@@ -34,6 +34,19 @@ def test_opening_a_document_creates_one_view_per_page(app, text_pdf):
     assert len(window._pages) == 2
     assert window.stack.get_visible_child_name() == "pages"
     assert window.sign_button.get_sensitive() is True
+    assert window.document_controls.get_visible() is True
+
+
+def test_empty_window_hides_document_controls(app):
+    window = ViewerWindow(app)
+    assert window.document_controls.get_visible() is False
+
+
+def test_narrow_window_keeps_signing_action_as_an_icon(app):
+    window = ViewerWindow(app)
+    window.set_default_size(640, 760)
+    window._adapt_header()
+    assert window.sign_button.get_icon_name() == "document-edit-symbolic"
 
 
 def test_pages_are_sized_from_the_document(app, text_pdf):
