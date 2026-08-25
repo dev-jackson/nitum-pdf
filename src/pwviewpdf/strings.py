@@ -9,8 +9,8 @@ APP_NAME = "Nitum PDF"
 
 OPEN = "Abrir"
 OPEN_TOOLTIP = "Abrir un PDF (Ctrl+O)"
-SIGN = "Firmar"
-SIGN_TOOLTIP = "Firmar este documento (Ctrl+F)"
+SIGN = "Firmar este PDF"
+SIGN_TOOLTIP = "Firmar o comprobar firmas (Ctrl+Mayús+S)"
 CANCEL = "Cancelar"
 CLOSE = "Cerrar"
 UNDERSTOOD = "Entendido"
@@ -48,12 +48,42 @@ UPDATE_READY = "Actualización descargada y verificada"
 UPDATE_INSTALL_FAILED = "No se pudo iniciar el instalador: {reason}"
 
 # --- signing ---------------------------------------------------------------
-SIGN_BANNER = "Arrastra un recuadro donde quieres que aparezca tu firma"
+SIGN_CENTER_TITLE = "Firmas"
+SIGN_CENTER_HEADING = "¿Qué necesitas hacer?"
+SIGN_CENTER_BODY = (
+    "Elige según quién debe firmar. Una firma digital protege el PDF y permite "
+    "comprobar quién lo firmó y si cambió después."
+)
+SIGN_MY_DOCUMENT = "Firmar este PDF con mi identidad"
+SIGN_MY_DOCUMENT_BODY = "Usar mi certificado, token o tarjeta para firmarlo digitalmente"
+SIGN_REVIEW_DOCUMENT = "Comprobar las firmas de este PDF"
+SIGN_REVIEW_DOCUMENT_BODY = "Ver quién firmó, si el archivo cambió y si la identidad es confiable"
+SIGN_SAVE_APPEARANCE = "Guardar mi firma visual"
+SIGN_SAVE_APPEARANCE_BODY = "Importar una imagen una sola vez y reutilizarla en otros PDF"
+SIGN_ADD = "Añadir"
+SIGN_CHANGE = "Cambiar"
+SIGN_IMAGE_FILTER = "Imágenes de firma"
+SIGN_IMAGE_SAVED = "Firma visual guardada para próximos documentos"
+SIGN_IMAGE_FAILED = "No se pudo guardar esa imagen: {reason}"
+SIGN_VISUAL_NOTE = (
+    "¿Buscas escribir o dibujar una rúbrica? Una imagen por sí sola no demuestra "
+    "identidad. Nitum la acompaña con un certificado digital para que pueda verificarse."
+)
+CONTINUE = "Continuar"
+CHECK = "Comprobar"
+SIGN_BANNER = "Paso 1 de 2 · Arrastra un recuadro donde debe verse la firma digital"
 SIGN_HERE = "Tu firma aquí"
 SIGN_TOO_SMALL = "El recuadro es demasiado pequeño; inténtalo de nuevo"
-SIGN_BANNER_INVISIBLE = "Firma invisible"
-SIGN_DIALOG_TITLE = "Firmar documento"
-SIGN_IDENTITY = "Firmar como"
+SIGN_BANNER_INVISIBLE = "Firmar sin sello visible"
+SIGN_DIALOG_TITLE = "Confirmar firma digital"
+SIGN_STEP_TWO = "Paso 2 de 2"
+SIGN_CONFIRM_BODY = "Revisa la identidad, la apariencia y la protección antes de guardar."
+SIGN_IDENTITY = "Identidad digital"
+SIGN_IDENTITY_HINT = "Este nombre quedará vinculado criptográficamente al PDF"
+SIGN_APPEARANCE = "Apariencia del sello"
+SIGN_APPEARANCE_SAVED = "Mi firma guardada + datos verificables"
+SIGN_APPEARANCE_DETAILS = "Nombre, fecha y detalles"
+SIGN_APPEARANCE_MINIMAL = "Solo nombre y fecha"
 SIGN_REASON = "Motivo (opcional)"
 SIGN_REASON_HINT = "Ej.: Conforme con el contenido"
 SIGN_LOCATION = "Lugar (opcional)"
@@ -64,15 +94,21 @@ SIGN_STRONG_HINT = (
 )
 SIGN_WHERE_PAGE = "Aparecerá en la página {page}"
 SIGN_WHERE_INVISIBLE = "Sin sello visible: la firma queda dentro del archivo"
-SIGN_BUTTON = "Firmar"
+SIGN_CERTIFY = "Bloquear cambios después de firmar"
+SIGN_CERTIFY_HINT = (
+    "Certifica el PDF como versión final. Solo está disponible antes de la primera firma."
+)
+SIGN_BUTTON = "Firmar y guardar"
 SIGN_WORKING = "Firmando…"
 
 NO_IDENTITIES_TITLE = "No hay ninguna identidad disponible"
 NO_IDENTITIES_BODY = (
-    "Conecta tu token o copia tu certificado .p12/.pfx a:\n{path}\n\n"
+    "Para una firma digital necesitas un certificado. Conecta tu token o importa "
+    "un archivo .p12/.pfx.\n\nCarpeta: {path}\n\n"
     "Si vienes de Windows: expórtalo desde «Administrar certificados de usuario» "
     "marcando «Exportar la clave privada»."
 )
+IMPORT_NOW = "Importar certificado"
 IMPORT_IDENTITY = "Importar certificado…"
 IMPORT_DONE = "Certificado importado: {name}"
 
@@ -87,8 +123,8 @@ DOWNGRADED_BODY = (
 # --- verification ----------------------------------------------------------
 VERIFY = "Verificar firmas"
 BANNER_DETAILS = "Ver detalles"
-BANNER_ALL_GOOD = "Firmado y verificado"
-BANNER_UNVERIFIED = "Firmado · identidad sin verificar"
+BANNER_ALL_GOOD = "{count} · Documento íntegro · Identidad verificada"
+BANNER_UNVERIFIED = "{count} · Documento íntegro · Identidad por verificar"
 BANNER_BROKEN = "Este documento fue alterado después de firmarse"
 VERIFY_TITLE = "Estado de las firmas"
 NO_SIGNATURES_TITLE = "Este documento no está firmado"
@@ -127,9 +163,13 @@ TRUST_CONFIRM_BODY = (
 TRUST_CONFIRM_ACTION = "Confiar"
 TRUST_DONE = "Emisor añadido a tus certificados de confianza"
 
-SUMMARY_ALL_GOOD = "Todo correcto: {n} firma(s) íntegra(s) y verificada(s)"
-SUMMARY_UNVERIFIED = "{n} firma(s) sin identidad verificada"
+SUMMARY_ALL_GOOD = "Todo correcto: {count}, todas íntegras y verificadas"
+SUMMARY_UNVERIFIED = "{count} sin identidad verificada"
 SUMMARY_BROKEN = "El documento fue alterado después de firmarse"
+
+
+def signature_count(n: int) -> str:
+    return "1 firma digital" if n == 1 else f"{n} firmas digitales"
 
 PASSWORD_TITLE = "Este PDF está protegido"
 PASSWORD_BODY = "Escribe la contraseña para abrir «{name}»."

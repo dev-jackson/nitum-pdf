@@ -17,7 +17,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
-from . import compat, identities, signing, state, strings as S, trust, updater  # noqa: E402
+from . import appearances, compat, identities, signing, state, strings as S, trust, updater  # noqa: E402
 from .document import Document, PasswordRequired  # noqa: E402
 
 ZOOM_STEPS = (0.5, 0.67, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0)
@@ -166,7 +166,8 @@ class ViewerWindow(Adw.ApplicationWindow):
         open_button.connect("clicked", lambda *_: self.choose_file())
         self.empty.set_child(open_button)
 
-        self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
+        # Never show the welcome page over the document during a crossfade.
+        self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.NONE)
         self.stack.add_named(self.empty, "empty")
         self.stack.add_named(self.scroller, "pages")
 
@@ -227,7 +228,7 @@ class ViewerWindow(Adw.ApplicationWindow):
 
         self.sign_button = Gtk.Button(label=S.SIGN, tooltip_text=S.SIGN_TOOLTIP,
                                       css_classes=["suggested-action"])
-        self.sign_button.connect("clicked", lambda *_: self.start_signing())
+        self.sign_button.connect("clicked", lambda *_: self.show_signature_center())
         header.pack_end(self.sign_button)
 
         menu = Gio.Menu()
@@ -293,15 +294,16 @@ class ViewerWindow(Adw.ApplicationWindow):
     def _install_actions(self) -> None:
         for name, handler, accels in (
             ("open", lambda *_: self.choose_file(), ["<Control>o"]),
-            ("sign", lambda *_: self.start_signing(), ["<Control>f"]),
-            ("verify", lambda *_: self.show_verification(), ["<Control>v"]),
+            ("sign", lambda *_: self.show_signature_center(), ["<Control><Shift>s"]),
+            ("verify", lambda *_: self.show_verification(), []),
             ("fit-width", lambda *_: self.apply_fit_width(), ["<Control>0"]),
             ("import-identity", lambda *_: self.choose_identity_file(), []),
             ("copy-text", lambda *_: self.copy_page_text(), ["<Control>c"]),
             ("check-updates", lambda *_: self.check_for_updates(manual=True), []),
             ("zoom-in", lambda *_: self.zoom(1), ["<Control>plus", "<Control>equal"]),
             ("zoom-out", lambda *_: self.zoom(-1), ["<Control>minus"]),
-            ("search", lambda *_: self.search_button.set_active(True), ["<Control>k"]),
+            ("search", lambda *_: self.search_button.set_active(True),
+             ["<Control>f", "<Control>k"]),
             ("escape", lambda *_: self.cancel_signing(), ["Escape"]),
         ):
             action = Gio.SimpleAction.new(name, None)
@@ -398,6 +400,8 @@ class ViewerWindow(Adw.ApplicationWindow):
         self.stack.set_visible_child_name("pages")
         self._build_pages()
         self._update_chrome()
+        # Refit after GTK has assigned the scroller its real width.
+        GLib.idle_add(self._on_resize)
         self._refresh_signature_banner()
 
     def _ask_password(self, path: Path, wrong: bool = False) -> None:
@@ -435,9 +439,11 @@ class ViewerWindow(Adw.ApplicationWindow):
         if any(not s.intact for s in statuses):
             title, css = S.BANNER_BROKEN, "error"
         elif any(not s.trusted for s in statuses):
-            title, css = S.BANNER_UNVERIFIED, "warning"
+            title, css = S.BANNER_UNVERIFIED.format(
+                count=S.signature_count(len(statuses))), "warning"
         else:
-            title, css = S.BANNER_ALL_GOOD, "success"
+            title, css = S.BANNER_ALL_GOOD.format(
+                count=S.signature_count(len(statuses))), "success"
         self.signature_banner.set_title(title)
         for name in ("success", "warning", "error"):
             self.signature_banner.remove_css_class(name)
@@ -602,6 +608,10 @@ class ViewerWindow(Adw.ApplicationWindow):
 
     # -- signing -----------------------------------------------------------
 
+    def show_signature_center(self) -> None:
+        if self.document is not None:
+            SignatureCenterDialog(self).present(self)
+
     def start_signing(self) -> None:
         if self.document is None:
             return
@@ -632,9 +642,13 @@ class ViewerWindow(Adw.ApplicationWindow):
     def _open_sign_dialog(self) -> None:
         available = identities.discover()
         if not available:
-            self.show_error(
+            compat.alert(
+                self,
                 S.NO_IDENTITIES_TITLE,
                 S.NO_IDENTITIES_BODY.format(path=identities.IDENTITY_DIR),
+                [("cancel", S.CANCEL), ("import", S.IMPORT_NOW)],
+                on_response=self._no_identity_response,
+                default_response="import",
             )
             return
         if self.pending:
@@ -643,8 +657,16 @@ class ViewerWindow(Adw.ApplicationWindow):
             where = S.SIGN_WHERE_INVISIBLE
         SignDialog(self, available, where).present(self)
 
+    def _no_identity_response(self, response: str) -> None:
+        if response == "import":
+            self.choose_identity_file(on_imported=self._open_sign_dialog)
+        else:
+            self.cancel_signing()
+
     def perform_signature(self, identity, secret: str, reason: str,
-                          location: str, strong: bool) -> None:
+                          location: str, strong: bool, certify: bool = False,
+                          appearance: str = "details",
+                          signature_image: Path | None = None) -> None:
         assert self.path is not None
         box = None
         if self.pending:
@@ -654,7 +676,9 @@ class ViewerWindow(Adw.ApplicationWindow):
         options = signing.SignOptions(
             page=self.pending[0] if self.pending else 0,
             box=box, reason=reason or None, location=location or None,
-            want_timestamp=strong, want_ltv=strong,
+            want_timestamp=strong, want_ltv=strong, certify=certify,
+            appearance=appearance,
+            signature_image=signature_image,
         )
         target = signing.suggest_output(self.path)
         source = self.path
@@ -713,13 +737,30 @@ class ViewerWindow(Adw.ApplicationWindow):
         self.get_clipboard().set(text)
         self.toast(S.COPIED)
 
-    def choose_identity_file(self) -> None:
+    def choose_identity_file(self, on_imported=None) -> None:
         def imported(path: str) -> None:
             stored = identities.import_pkcs12(Path(path))
             self.toast(S.IMPORT_DONE.format(name=stored.name))
+            if on_imported:
+                on_imported()
 
         compat.open_file(self, S.IMPORT_IDENTITY, imported,
                          patterns=("*.p12", "*.pfx"), filter_name="PKCS#12")
+
+    def choose_signature_image(self, on_imported=None) -> None:
+        def imported(path: str) -> None:
+            try:
+                stored = appearances.import_signature(Path(path))
+            except Exception as exc:
+                self.toast(S.SIGN_IMAGE_FAILED.format(reason=str(exc)))
+                return
+            self.toast(S.SIGN_IMAGE_SAVED)
+            if on_imported:
+                on_imported(stored)
+
+        compat.open_file(self, S.SIGN_SAVE_APPEARANCE, imported,
+                         patterns=("*.png", "*.jpg", "*.jpeg", "*.webp"),
+                         filter_name=S.SIGN_IMAGE_FILTER)
 
     # -- feedback ----------------------------------------------------------
 
@@ -740,6 +781,67 @@ class ViewerWindow(Adw.ApplicationWindow):
         self.stack.set_visible_child_name("pages" if has_document else "empty")
 
 
+class SignatureCenterDialog:
+    """Start from the person's intent, not from certificate mechanics."""
+
+    def __init__(self, window: ViewerWindow):
+        self.window = window
+        self.dialog = compat.Dialog(S.SIGN_CENTER_TITLE, width=560)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
+                      margin_top=18, margin_bottom=18, margin_start=18, margin_end=18)
+        box.append(Gtk.Label(label=S.SIGN_CENTER_HEADING, xalign=0,
+                             css_classes=["title-2"]))
+        box.append(Gtk.Label(label=S.SIGN_CENTER_BODY, xalign=0, wrap=True))
+
+        group = Adw.PreferencesGroup()
+        sign = Adw.ActionRow(title=S.SIGN_MY_DOCUMENT,
+                             subtitle=S.SIGN_MY_DOCUMENT_BODY)
+        sign.add_prefix(Gtk.Image(icon_name="document-edit-symbolic"))
+        sign_button = Gtk.Button(label=S.CONTINUE, valign=Gtk.Align.CENTER,
+                                 css_classes=["suggested-action"])
+        sign_button.connect("clicked", self._sign)
+        sign.add_suffix(sign_button)
+        group.add(sign)
+
+        verify = Adw.ActionRow(title=S.SIGN_REVIEW_DOCUMENT,
+                               subtitle=S.SIGN_REVIEW_DOCUMENT_BODY)
+        verify.add_prefix(Gtk.Image(icon_name="security-high-symbolic"))
+        verify_button = Gtk.Button(label=S.CHECK, valign=Gtk.Align.CENTER)
+        verify_button.connect("clicked", self._verify)
+        verify.add_suffix(verify_button)
+        group.add(verify)
+
+        visual = Adw.ActionRow(title=S.SIGN_SAVE_APPEARANCE,
+                               subtitle=S.SIGN_SAVE_APPEARANCE_BODY)
+        visual.add_prefix(Gtk.Image(icon_name="insert-image-symbolic"))
+        visual_button = Gtk.Button(
+            label=S.SIGN_CHANGE if appearances.saved() else S.SIGN_ADD,
+            valign=Gtk.Align.CENTER,
+        )
+        visual_button.connect("clicked", self._save_appearance)
+        visual.add_suffix(visual_button)
+        group.add(visual)
+        box.append(group)
+        box.append(Gtk.Label(label=S.SIGN_VISUAL_NOTE, xalign=0, wrap=True,
+                             css_classes=["dim-label", "caption"]))
+        self.dialog.set_child(compat.toolbar_view(Adw.HeaderBar(), box))
+
+    def present(self, parent) -> None:
+        self.dialog.present(parent)
+
+    def _sign(self, *_args) -> None:
+        self.dialog.close()
+        self.window.start_signing()
+
+    def _verify(self, *_args) -> None:
+        self.dialog.close()
+        self.window.show_verification()
+
+    def _save_appearance(self, *_args) -> None:
+        self.dialog.close()
+        self.window.choose_signature_image()
+
+
 class SignDialog:
     """One screen, four decisions, and only the first one is mandatory."""
 
@@ -747,11 +849,11 @@ class SignDialog:
                  where: str | None = None):
         self.window = window
         self.available = available
-        self.dialog = compat.Dialog(S.SIGN_DIALOG_TITLE, width=460)
+        self.dialog = compat.Dialog(S.SIGN_DIALOG_TITLE, width=560)
 
         self.identity_row = Adw.ComboRow(
             title=S.SIGN_IDENTITY,
-            subtitle=where or "",
+            subtitle=f"{S.SIGN_IDENTITY_HINT}\n{where or ''}",
             model=Gtk.StringList.new([i.label for i in available]),
         )
         self.identity_row.connect("notify::selected", lambda *_: self._sync_secret_title())
@@ -767,13 +869,30 @@ class SignDialog:
         )
         self.reason_row, self._reason_text = compat.entry_row(S.SIGN_REASON)
         self.location_row, self._location_text = compat.entry_row(S.SIGN_LOCATION)
+        self.appearance_options = []
+        if appearances.saved():
+            self.appearance_options.append((S.SIGN_APPEARANCE_SAVED, "saved"))
+        self.appearance_options.extend((
+            (S.SIGN_APPEARANCE_DETAILS, "details"),
+            (S.SIGN_APPEARANCE_MINIMAL, "minimal"),
+        ))
+        self.appearance_row = Adw.ComboRow(
+            title=S.SIGN_APPEARANCE,
+            model=Gtk.StringList.new([label for label, _value in self.appearance_options]),
+        )
         self.strong_row, self._strong_active = compat.switch_row(
             S.SIGN_STRONG, S.SIGN_STRONG_HINT, active=True,
         )
+        self.certify_row, self._certify_active = compat.switch_row(
+            S.SIGN_CERTIFY, S.SIGN_CERTIFY_HINT, active=False,
+        )
+        self.can_certify = bool(window.path and signing.signature_count(window.path) == 0)
+        self.certify_row.set_visible(self.can_certify)
 
         group = Adw.PreferencesGroup()
-        for row in (self.identity_row, self.secret_row, self.reason_row,
-                    self.location_row, self.strong_row):
+        for row in (self.identity_row, self.secret_row, self.appearance_row,
+                    self.reason_row, self.location_row, self.strong_row,
+                    self.certify_row):
             group.add(row)
 
         sign_button = Gtk.Button(label=S.SIGN_BUTTON, css_classes=["suggested-action"])
@@ -784,6 +903,10 @@ class SignDialog:
 
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
                        margin_top=12, margin_bottom=18, margin_start=18, margin_end=18)
+        page.append(Gtk.Label(label=S.SIGN_STEP_TWO, xalign=0,
+                              css_classes=["title-3"]))
+        page.append(Gtk.Label(label=S.SIGN_CONFIRM_BODY, xalign=0, wrap=True,
+                              css_classes=["dim-label"]))
         page.append(group)
         self.dialog.set_child(compat.toolbar_view(header, page))
 
@@ -799,9 +922,13 @@ class SignDialog:
         identity = self.available[self.identity_row.get_selected()]
         state.remember("last_identity", identity.label)
         self.dialog.close()
+        appearance = self.appearance_options[self.appearance_row.get_selected()][1]
         self.window.perform_signature(
             identity, self._secret_text(), self._reason_text(),
             self._location_text(), self._strong_active(),
+            certify=self.can_certify and self._certify_active(),
+            appearance="details" if appearance == "saved" else appearance,
+            signature_image=appearances.saved() if appearance == "saved" else None,
         )
 
 
@@ -860,10 +987,12 @@ class StatusDialog:
         if broken:
             text, css, icon = S.SUMMARY_BROKEN, "error", "dialog-error-symbolic"
         elif unverified:
-            text = S.SUMMARY_UNVERIFIED.format(n=len(unverified))
+            text = S.SUMMARY_UNVERIFIED.format(
+                count=S.signature_count(len(unverified)))
             css, icon = "warning", "dialog-warning-symbolic"
         else:
-            text = S.SUMMARY_ALL_GOOD.format(n=len(statuses))
+            text = S.SUMMARY_ALL_GOOD.format(
+                count=S.signature_count(len(statuses)))
             css, icon = "success", "object-select-symbolic"
         row = Gtk.Box(spacing=10)
         row.append(Gtk.Image(icon_name=icon, css_classes=[css], pixel_size=20))

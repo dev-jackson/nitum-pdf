@@ -1,6 +1,6 @@
 """End-to-end check: make an identity, sign a real PDF, verify, print the result.
 
-Usage: python scripts/demo_sign.py <input.pdf> <workdir> [--tsa]
+Usage: python scripts/demo_sign.py <input.pdf> <workdir> [--tsa] [--appearance=signature.png]
 """
 
 from __future__ import annotations
@@ -56,6 +56,8 @@ def main() -> int:
     source = Path(sys.argv[1])
     workdir = Path(sys.argv[2])
     want_tsa = "--tsa" in sys.argv
+    appearance = next((Path(arg.split("=", 1)[1]) for arg in sys.argv
+                       if arg.startswith("--appearance=")), None)
 
     p12, cert_der = make_identity(workdir / "identities")
     geometry = PageGeometry(0, 0, 595, 842)
@@ -63,7 +65,7 @@ def main() -> int:
     box = geometry.rect_to_pdf((70, 400, 270, 460), 1.0)
     options = signing.SignOptions(
         page=0, box=box, reason="Conforme con el contenido", location="Madrid",
-        want_timestamp=want_tsa, want_ltv=False,
+        want_timestamp=want_tsa, want_ltv=False, signature_image=appearance,
     )
     target = signing.suggest_output(workdir / source.name)
     result = signing.sign_with_pkcs12(source, target, p12, PASSWORD, options)

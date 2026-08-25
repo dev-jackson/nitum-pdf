@@ -12,6 +12,7 @@ from pathlib import Path
 
 from pyhanko import stamp
 from pyhanko.pdf_utils import text as pdf_text
+from pyhanko.pdf_utils.images import PdfImage
 from pyhanko.pdf_utils import misc
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.pdf_utils.reader import PdfFileReader
@@ -32,14 +33,20 @@ STAMP_TIMESTAMP_FORMAT = "%d/%m/%Y %H:%M %Z"
 
 
 def _stamp_style(options: "SignOptions") -> stamp.TextStampStyle:
-    lines = [STAMP_HEADING, "%(signer)s", "%(ts)s"]
-    if options.reason:
-        lines.append("Motivo: %(reason)s")
-    if options.location:
-        lines.append("Lugar: %(location)s")
+    if options.appearance == "minimal":
+        lines = ["%(signer)s", "%(ts)s"]
+    else:
+        lines = [STAMP_HEADING, "%(signer)s", "%(ts)s"]
+        if options.reason:
+            lines.append("Motivo: %(reason)s")
+        if options.location:
+            lines.append("Lugar: %(location)s")
+    background = PdfImage(str(options.signature_image)) if options.signature_image else None
     return stamp.TextStampStyle(
         stamp_text="\n".join(lines),
         border_width=0,
+        background=background,
+        background_opacity=0.38 if background else 1.0,
         timestamp_format=STAMP_TIMESTAMP_FORMAT,
         text_box_style=pdf_text.TextBoxStyle(font_size=7, leading=9),
     )
@@ -65,6 +72,8 @@ class SignOptions:
     want_ltv: bool = True
     tsa_url: str = DEFAULT_TSA_URL
     certify: bool = False             # first signature acts as author signature
+    appearance: str = "details"       # "details" or "minimal"
+    signature_image: Path | None = None
 
 
 @dataclass
