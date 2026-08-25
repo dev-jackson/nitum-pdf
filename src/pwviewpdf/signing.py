@@ -12,6 +12,8 @@ from pathlib import Path
 
 from pyhanko import stamp
 from pyhanko.pdf_utils import text as pdf_text
+from pyhanko.pdf_utils.images import PdfImage
+from pyhanko.pdf_utils import layout
 from pyhanko.pdf_utils import misc
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.pdf_utils.reader import PdfFileReader
@@ -32,14 +34,38 @@ STAMP_TIMESTAMP_FORMAT = "%d/%m/%Y %H:%M %Z"
 
 
 def _stamp_style(options: "SignOptions") -> stamp.TextStampStyle:
-    lines = [STAMP_HEADING, "%(signer)s", "%(ts)s"]
-    if options.reason:
-        lines.append("Motivo: %(reason)s")
-    if options.location:
-        lines.append("Lugar: %(location)s")
+    if options.signature_image:
+        lines = [STAMP_HEADING, "%(signer)s", "%(ts)s"]
+    elif options.appearance == "minimal":
+        lines = ["%(signer)s", "%(ts)s"]
+    else:
+        lines = [STAMP_HEADING, "%(signer)s", "%(ts)s"]
+        if options.reason:
+            lines.append("Motivo: %(reason)s")
+        if options.location:
+            lines.append("Lugar: %(location)s")
+    background = PdfImage(str(options.signature_image)) if options.signature_image else None
+    split_background = layout.SimpleBoxLayoutRule(
+        x_align=layout.AxisAlignment.ALIGN_MID,
+        y_align=layout.AxisAlignment.ALIGN_MID,
+        margins=layout.Margins(left=112, right=6, top=6, bottom=6),
+    ) if background else layout.SimpleBoxLayoutRule(
+        x_align=layout.AxisAlignment.ALIGN_MID,
+        y_align=layout.AxisAlignment.ALIGN_MID,
+        margins=layout.Margins(left=5, right=5, top=5, bottom=5),
+    )
+    split_text = layout.SimpleBoxLayoutRule(
+        x_align=layout.AxisAlignment.ALIGN_MIN,
+        y_align=layout.AxisAlignment.ALIGN_MID,
+        margins=layout.Margins(left=6, right=100, top=5, bottom=5),
+    ) if background else None
     return stamp.TextStampStyle(
         stamp_text="\n".join(lines),
         border_width=0,
+        background=background,
+        background_layout=split_background,
+        background_opacity=0.88 if background else 1.0,
+        inner_content_layout=split_text,
         timestamp_format=STAMP_TIMESTAMP_FORMAT,
         text_box_style=pdf_text.TextBoxStyle(font_size=7, leading=9),
     )
@@ -65,6 +91,8 @@ class SignOptions:
     want_ltv: bool = True
     tsa_url: str = DEFAULT_TSA_URL
     certify: bool = False             # first signature acts as author signature
+    appearance: str = "details"       # "details" or "minimal"
+    signature_image: Path | None = None
 
 
 @dataclass

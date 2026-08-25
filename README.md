@@ -13,6 +13,8 @@ confiables y sin complejidad innecesaria.
 
 - Desplazamiento continuo, zoom, búsqueda y copia de texto.
 - Firma visible o invisible con certificados `.p12`/`.pfx` y tokens PKCS#11.
+- Apariencia de firma visual guardada y reutilizable, siempre respaldada por el certificado.
+- Flujo guiado para firmar, certificar o comprobar firmas recibidas.
 - Sello de tiempo RFC 3161 y validación a largo plazo activados por defecto.
 - Firmas incrementales; nunca sobrescribe el documento original.
 - Comprobación automática diaria de nuevas versiones publicadas en GitHub.
@@ -48,6 +50,20 @@ python -m pytest
 ./packaging/build-deb.sh
 sudo apt install ./dist/nitum-pdf_*.deb
 ```
+
+## Atajos
+
+| Tecla | Acción |
+|---|---|
+| Ctrl+F o Ctrl+K | Buscar dentro del PDF |
+| Ctrl+Mayús+S | Abrir el centro de firmas |
+| Ctrl+O | Abrir otro PDF |
+| Ctrl+C | Copiar el texto de la página |
+| Ctrl+0 | Ajustar al ancho |
+| Esc | Cancelar la colocación de firma |
+
+Las decisiones de interfaz y sus referentes están documentados en
+[DESIGN.md](DESIGN.md).
 
 ## GitFlow y releases
 

@@ -10,7 +10,9 @@ from gi.repository import Adw, Gtk  # noqa: E402
 if not Gtk.init_check():
     pytest.skip("no display available", allow_module_level=True)
 
-from pwviewpdf.app import PwViewPdf, SignDialog, StatusDialog, ViewerWindow  # noqa: E402
+from pwviewpdf.app import (  # noqa: E402
+    PwViewPdf, SignDialog, SignatureCenterDialog, StatusDialog, ViewerWindow,
+)
 from pwviewpdf.identities import Identity  # noqa: E402
 
 
@@ -55,6 +57,14 @@ def test_signing_mode_arms_the_pages(app, text_pdf):
     assert all(view.selectable for view in window._pages)
     window.cancel_signing()
     assert not any(view.selectable for view in window._pages)
+
+
+def test_signature_center_starts_from_the_users_intent(app, text_pdf):
+    window = ViewerWindow(app)
+    window.open_document(text_pdf)
+    center = SignatureCenterDialog(window)
+    assert center.dialog.title == "Firmas"
+    assert window.sign_button.get_label() == "Firmar este PDF"
 
 
 def test_dragged_rectangle_becomes_a_pdf_box(app, text_pdf):

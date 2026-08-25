@@ -130,6 +130,31 @@ def test_visible_signature_is_actually_drawn(sample_pdf, identity):
     assert _ink(signed, 0, 70, 400, 270, 460) > 200
 
 
+def test_saved_visual_signature_is_embedded_in_digital_stamp(sample_pdf, identity, tmp_path):
+    from PIL import Image, ImageDraw
+
+    visual = tmp_path / "signature.png"
+    image = Image.new("RGBA", (500, 180), (255, 255, 255, 0))
+    ImageDraw.Draw(image).line((30, 120, 460, 45), fill="navy", width=12)
+    image.save(visual)
+    box = PageGeometry(0, 0, 595, 842).rect_to_pdf((70, 400, 370, 500), 1.0)
+    options = signing.SignOptions(
+        page=0, box=box, signature_image=visual,
+        want_timestamp=False, want_ltv=False,
+    )
+    signed = sign(sample_pdf, identity, options).output
+    assert _ink(signed, 0, 70, 400, 370, 500) > 500
+
+
+def test_first_signature_can_certify_the_document(sample_pdf, identity):
+    options = signing.SignOptions(certify=True, want_timestamp=False, want_ltv=False)
+    signed = sign(sample_pdf, identity, options).output
+    from pyhanko.pdf_utils.reader import PdfFileReader
+    with open(signed, "rb") as handle:
+        embedded = PdfFileReader(handle).embedded_signatures[0]
+        assert embedded.docmdp_level is not None
+
+
 def test_invisible_signature_adds_no_ink(sample_pdf, identity):
     signed = sign(sample_pdf, identity).output
     assert _ink(signed, 0, 0, 0, 595, 842) == 0
