@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nitum-pdf"
+version = "0.2.0"
+description = "Nitum PDF: visor y firmador de PDF simple, seguro y pensado para Linux"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "pypdfium2>=5.13",
+    "pyhanko[image-support]>=0.36",
+    "pyhanko-certvalidator>=0.31",
+    # PyGObject (GTK4 + libadwaita) comes from the distro packages, not pip.
+]
+
+[project.optional-dependencies]
+pkcs11 = ["pyhanko[pkcs11]>=0.36"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+nitum-pdf = "pwviewpdf.app:main"
+pw-view-pdf = "pwviewpdf.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
