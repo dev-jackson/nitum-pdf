@@ -48,9 +48,9 @@ confiables y sin complejidad innecesaria.
 
 ## Instalar
 
-Descarga el `.deb`, `.pkg` o `.exe` más reciente desde
-[GitHub Releases](https://github.com/dev-jackson/nitum-pdf/releases/latest) y ábrelo
-con el instalador del sistema, o ejecuta:
+La versión 0.6 se distribuye inicialmente para Linux. Descarga el `.deb` más
+reciente desde [GitHub Releases](https://github.com/dev-jackson/nitum-pdf/releases/latest)
+y ábrelo con el instalador del sistema.
 
 En Debian/Ubuntu también puedes ejecutar `sudo apt install ./nitum-pdf-*.deb`.
 
@@ -102,7 +102,8 @@ visuales están en [docs/QUALITY_REPORT.md](docs/QUALITY_REPORT.md).
 El proyecto usa `main` para publicaciones y `develop` para integración. Consulta
 [CONTRIBUTING.md](CONTRIBUTING.md) para crear `feature/*`, `release/*` y `hotfix/*`.
 Cada etiqueta `vX.Y.Z` creada en `main` construye paquetes Linux x86_64/ARM64,
-macOS Intel/Apple Silicon y Windows x86_64, sus SHA-256 y un GitHub Release.
+sus SHA-256, attestations de procedencia y un GitHub Release. macOS y Windows
+siguen verificándose en CI y se incorporarán a la distribución más adelante.
 
 ## Privacidad y seguridad
 

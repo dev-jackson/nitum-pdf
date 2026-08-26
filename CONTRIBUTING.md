@@ -29,14 +29,15 @@ git push origin main develop v<versión>
 
 La etiqueta debe estar firmada. GitHub Actions genera paquetes, checksums y
 attestations Sigstore verificables con `gh attestation verify`; no se deben
-adjuntar binarios construidos manualmente a un release oficial. El workflow
-rechaza una publicación sin Developer ID/notarización en macOS o Authenticode
-en Windows.
+adjuntar binarios construidos manualmente a un release oficial. La distribución
+0.6 publica únicamente Linux. macOS y Windows permanecen en las pruebas de
+paquetes y se habilitarán cuando sus credenciales de firma estén disponibles.
 
 ### Credenciales de distribución
 
-Configura estos secretos del repositorio con `gh secret set <NOMBRE>` antes de
-crear la etiqueta. Nunca guardes certificados ni contraseñas en el árbol Git.
+Estas credenciales no son necesarias para el release Linux. Antes de habilitar
+macOS o Windows, configúralas con `gh secret set <NOMBRE>`. Nunca guardes
+certificados ni contraseñas en el árbol Git.
 Para cargarlos de forma guiada, sin imprimir valores ni crear copias temporales,
 ejecuta `packaging/native/configure-release-secrets.sh`. El script valida ambos
 PKCS#12 antes de solicitar confirmación y modificar GitHub.
