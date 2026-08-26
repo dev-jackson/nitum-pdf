@@ -10,8 +10,8 @@ Slint por software.
 
 | Escenario | Tiempo real | RSS máximo | Resultado |
 |---|---:|---:|---|
-| 20 escenas light/dark, diálogos, búsqueda y ventana 720×560 | 0,22 s | 117,2 MiB | Aprobado |
-| Abrir PDF real, renderizar, buscar y extraer texto con PDFium | 0,41 s | 15,6 MiB | Aprobado |
+| 20 escenas light/dark, diálogos, búsqueda y ventana 720×560 | 0,67 s | 113,2 MiB | Aprobado |
+| Abrir PDF real, renderizar, buscar y extraer texto con PDFium | 0,13 s | 15,7 MiB | Aprobado |
 | Firma PAdES B-T contra DigiCert TSA y verificación RFC 3161 | 0,54 s | — | Aprobado |
 | Dos firmas PAdES B-B incrementales consecutivas | 0,19 s | — | Aprobado |
 | Certificación DocMDP P=1 con comprobación criptográfica y estructural | 0,17 s | — | Aprobado |

@@ -1,4 +1,6 @@
-use i_slint_backend_testing::{TestingBackend, TestingBackendOptions};
+use i_slint_backend_testing::{
+    AccessibleRole, ElementHandle, ElementQuery, TestingBackend, TestingBackendOptions,
+};
 use nitum_pdf::{AppWindow, PageItem, Palette};
 use slint::{
     ComponentHandle, Image, LogicalSize, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel,
@@ -35,6 +37,35 @@ fn save_if_requested(name: &str, snapshot: &slint::SharedPixelBuffer<slint::Rgba
     .unwrap();
 }
 
+fn assert_accessible_controls(ui: &AppWindow, context: &str) {
+    for role in [
+        AccessibleRole::Button,
+        AccessibleRole::Checkbox,
+        AccessibleRole::TextInput,
+    ] {
+        let controls = ElementQuery::from_root(ui)
+            .match_accessible_role(role)
+            .find_all();
+        for control in controls {
+            let label = control.accessible_label().unwrap_or_default();
+            assert!(
+                !label.trim().is_empty(),
+                "an accessible {role:?} in {context} has no label: {}",
+                control.id().unwrap_or_else(|| "<unknown>".into())
+            );
+        }
+    }
+}
+
+fn assert_accessible_action(ui: &AppWindow, label: &str, context: &str) {
+    assert!(
+        ElementHandle::find_by_accessible_label(ui, label)
+            .next()
+            .is_some(),
+        "the {context} view does not expose the {label:?} action"
+    );
+}
+
 #[test]
 fn light_dark_and_signature_center_render_headlessly() {
     slint::platform::set_platform(Box::new(TestingBackend::new(TestingBackendOptions {
@@ -48,12 +79,17 @@ fn light_dark_and_signature_center_render_headlessly() {
     ui.window().set_size(LogicalSize::new(1180.0, 820.0));
     ui.show().unwrap();
 
+    assert_accessible_controls(&ui, "empty shell");
+    assert_accessible_action(&ui, "Abrir un PDF", "empty shell");
+
     let light = ui.window().take_snapshot().unwrap();
     ui.global::<Palette>().set_dark(true);
     let dark = ui.window().take_snapshot().unwrap();
     assert!(luminance(light.as_bytes()) > luminance(dark.as_bytes()) + 35.0);
 
     ui.set_active_dialog(1);
+    assert_accessible_controls(&ui, "signature center");
+    assert_accessible_action(&ui, "Cerrar", "signature center");
     let signature_center = ui.window().take_snapshot().unwrap();
     assert_ne!(dark.as_bytes(), signature_center.as_bytes());
     assert_eq!(
@@ -109,6 +145,8 @@ fn light_dark_and_signature_center_render_headlessly() {
     ui.set_identity_name("Identidad de prueba".into());
     ui.set_identity_path("identity.p12".into());
     ui.set_active_dialog(2);
+    assert_accessible_controls(&ui, "signing flow");
+    assert_accessible_action(&ui, "Cancelar", "signing flow");
     let signing = ui.window().take_snapshot().unwrap();
     assert_ne!(document.as_bytes(), signing.as_bytes());
     save_if_requested("signing-flow-dark.png", &signing);
@@ -118,6 +156,8 @@ fn light_dark_and_signature_center_render_headlessly() {
         "Iniciales contrato".into(),
     ]))));
     ui.set_active_dialog(7);
+    assert_accessible_controls(&ui, "appearance library");
+    assert_accessible_action(&ui, "Cerrar", "appearance library");
     let _transition_frame = ui.window().take_snapshot().unwrap();
     let appearance_library = ui.window().take_snapshot().unwrap();
     assert_ne!(signing.as_bytes(), appearance_library.as_bytes());
@@ -128,6 +168,8 @@ fn light_dark_and_signature_center_render_headlessly() {
         "Firma personal".into(),
     ]))));
     ui.set_active_dialog(8);
+    assert_accessible_controls(&ui, "identity library");
+    assert_accessible_action(&ui, "Cerrar", "identity library");
     for _ in 0..3 {
         let _transition_frame = ui.window().take_snapshot().unwrap();
     }
@@ -202,6 +244,8 @@ fn light_dark_and_signature_center_render_headlessly() {
     ui.set_update_available(true);
     ui.set_update_status("La versión 0.7.0 está lista para descargar.".into());
     ui.set_active_dialog(4);
+    assert_accessible_controls(&ui, "updater");
+    assert_accessible_action(&ui, "Ahora no", "updater");
     let update_available = ui.window().take_snapshot().unwrap();
     assert_ne!(update_available.as_bytes(), signing.as_bytes());
     save_if_requested("update-available-dark.png", &update_available);
