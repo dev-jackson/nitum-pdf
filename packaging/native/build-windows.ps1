@@ -25,6 +25,7 @@ function Invoke-NitumCodeSign([string]$Path) {
 
 cargo build --manifest-path "$ProjectDir\native\Cargo.toml" --release --locked
 & "C:\Program Files\Git\bin\bash.exe" "$ProjectDir/native/scripts/fetch-pdfium.sh" "$ProjectDir/native/target/release"
+if ($LASTEXITCODE -ne 0) { throw "No se pudo descargar y verificar PDFium para Windows." }
 Invoke-NitumCodeSign "$ProjectDir\native\target\release\nitum-pdf.exe"
 $OutputDir = "$ProjectDir\dist"
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null

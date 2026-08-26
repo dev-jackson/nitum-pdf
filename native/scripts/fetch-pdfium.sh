@@ -22,7 +22,14 @@ archive="$temporary/$asset"
 url="https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F$version/$asset"
 
 curl --fail --location --silent --show-error "$url" --output "$archive"
-actual=$(shasum -a 256 "$archive" | awk '{print $1}')
+if command -v sha256sum >/dev/null 2>&1; then
+  actual=$(sha256sum "$archive" | awk '{print $1}')
+elif command -v shasum >/dev/null 2>&1; then
+  actual=$(shasum -a 256 "$archive" | awk '{print $1}')
+else
+  echo "No se encontró una herramienta SHA-256 compatible." >&2
+  exit 2
+fi
 if [ "$actual" != "$expected" ]; then
   echo "PDFium no superó la comprobación SHA-256." >&2
   exit 3
