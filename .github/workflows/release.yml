@@ -1,42 +1,64 @@
-name: Release
+name: Native Linux release
 on:
   push:
     tags: ["v*"]
+
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
-  build:
+  validate-version:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Require tag and Rust package version to match
+        run: |
+          package_version=$(cargo metadata --manifest-path native/Cargo.toml --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "nitum-pdf") | .version')
+          if [ "v$package_version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match native package version $package_version." >&2
+            exit 1
+          fi
+
+  linux:
+    needs: validate-version
     strategy:
       matrix:
         include:
           - runner: ubuntu-24.04
-            arch: amd64
+            arch: x86_64
           - runner: ubuntu-24.04-arm
-            arch: arm64
+            arch: aarch64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v5
-      - run: sudo apt-get update && sudo apt-get install -y python3-venv python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 dpkg-dev
-      - run: ./packaging/build-deb.sh
-      - run: cd dist && sha256sum nitum-pdf_*.deb > "$(basename nitum-pdf_*.deb).sha256"
-      - uses: actions/upload-artifact@v4
+      - run: sudo apt-get update && sudo apt-get install -y dpkg-dev libfontconfig1-dev libxkbcommon-dev libssl-dev
+      - run: rustup update stable && rustup default stable
+      - name: Build native Debian package
+        run: packaging/native/build-linux-deb.sh "${GITHUB_REF_NAME#v}"
+      - name: Create checksum
+        run: cd dist && sha256sum ./*.deb > "nitum-pdf-${GITHUB_REF_NAME#v}-linux-${{ matrix.arch }}.deb.sha256"
+      - name: Attest Linux artifacts
+        uses: actions/attest@v4
         with:
-          name: deb-${{ matrix.arch }}
-          path: |
-            dist/nitum-pdf_*.deb
-            dist/nitum-pdf_*.deb.sha256
+          subject-path: dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-linux-${{ matrix.arch }}
+          path: dist/*
 
   publish:
-    needs: build
+    needs: linux
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
-          pattern: deb-*
+          pattern: "release-*"
           path: dist
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: dist/*

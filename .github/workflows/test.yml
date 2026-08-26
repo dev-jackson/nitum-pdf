@@ -1,13 +1,86 @@
-name: Tests
-on: [push, pull_request]
+name: Native Rust tests
+on:
+  pull_request:
+  push:
+    branches: [main, develop, "release/**", "hotfix/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    runs-on: ubuntu-24.04
+  platform-check:
+    name: Compile on ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Apple Silicon
+            runner: macos-15
+          - name: Windows x86_64
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v5
-      - run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - run: pip install -e ".[dev]"
-      - run: pytest
+      - name: Use current stable Rust
+        run: rustup update stable && rustup default stable
+      - name: Compile every Rust target
+        run: cargo check --manifest-path native/Cargo.toml --all-targets --locked
+
+  rust:
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v5
+      - name: Reject Python sources and tooling
+        shell: bash
+        run: |
+          legacy=$(find . -path './.git' -prune -o -path './native/target' -prune -o -type f \( -name '*.py' -o -name '*.pyc' -o -name 'pyproject.toml' -o -name 'requirements*.txt' -o -name 'Pipfile*' -o -name 'poetry.lock' \) -print)
+          if [ -n "$legacy" ]; then
+            printf 'Python is not part of the native architecture:\n%s\n' "$legacy" >&2
+            exit 1
+          fi
+      - name: Install native test dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libxkbcommon-dev libssl-dev opensc qpdf softhsm2
+      - name: Use current stable Rust
+        run: rustup update stable && rustup default stable
+      - name: Check formatting
+        run: cargo fmt --manifest-path native/Cargo.toml --all --check
+      - name: Lint all targets
+        run: cargo clippy --manifest-path native/Cargo.toml --all-targets --locked -- -D warnings
+      - name: Run unit and contract tests
+        run: cargo test --manifest-path native/Cargo.toml --locked
+      - name: Install verified PDFium
+        run: native/scripts/fetch-pdfium.sh native/target/debug
+      - name: Test rendering and encrypted PDFs
+        run: |
+          cargo test --manifest-path native/Cargo.toml --test pdfium_adapter opens_and_renders_a_real_pdf --locked -- --ignored
+          cargo test --manifest-path native/Cargo.toml --test pdfium_adapter damaged_pdf_is_rejected_cleanly --locked -- --ignored
+          qpdf --encrypt secreto secreto 256 -- native/tests/fixtures/sample.pdf "$RUNNER_TEMP/encrypted.pdf"
+          NITUM_TEST_ENCRYPTED_PDF="$RUNNER_TEMP/encrypted.pdf" NITUM_TEST_PDF_PASSWORD=secreto cargo test --manifest-path native/Cargo.toml --test pdfium_adapter encrypted_pdf_requires_and_accepts_its_password --locked -- --ignored
+      - name: Test modern PKCS12 and implemented PAdES levels
+        run: |
+          openssl req -x509 -newkey rsa:2048 -keyout "$RUNNER_TEMP/key.pem" -out "$RUNNER_TEMP/cert.pem" -days 2 -nodes -subj '/CN=Nitum CI/O=Nitum'
+          openssl pkcs12 -export -out "$RUNNER_TEMP/identity.p12" -inkey "$RUNNER_TEMP/key.pem" -in "$RUNNER_TEMP/cert.pem" -passout pass:prueba-segura
+          for level in B-B B-T B-LT B-LTA; do
+            NITUM_TEST_P12="$RUNNER_TEMP/identity.p12" NITUM_TEST_P12_PASSWORD=prueba-segura NITUM_TEST_PADES_LEVEL="$level" NITUM_TEST_APPEARANCE="$GITHUB_WORKSPACE/data/nitum-family-mark.png" cargo test --manifest-path native/Cargo.toml --test signing_adapter --locked -- --ignored
+          done
+          NITUM_TEST_P12="$RUNNER_TEMP/identity.p12" NITUM_TEST_P12_PASSWORD=prueba-segura NITUM_TEST_SUCCESSIVE=1 cargo test --manifest-path native/Cargo.toml --test signing_adapter --locked -- --ignored
+          NITUM_TEST_P12="$RUNNER_TEMP/identity.p12" NITUM_TEST_P12_PASSWORD=prueba-segura NITUM_TEST_CERTIFICATION=1 cargo test --manifest-path native/Cargo.toml --test signing_adapter --locked -- --ignored
+      - name: Provision a software PKCS11 token
+        run: |
+          mkdir -p "$RUNNER_TEMP/tokens"
+          printf 'directories.tokendir = %s\nobjectstore.backend = file\nlog.level = ERROR\n' "$RUNNER_TEMP/tokens" > "$RUNNER_TEMP/softhsm2.conf"
+          export SOFTHSM2_CONF="$RUNNER_TEMP/softhsm2.conf"
+          softhsm2-util --init-token --free --label 'Nitum CI Token' --so-pin 12345678 --pin 123456
+          openssl x509 -in "$RUNNER_TEMP/cert.pem" -outform DER -out "$RUNNER_TEMP/cert.der"
+          softhsm2-util --import "$RUNNER_TEMP/key.pem" --token 'Nitum CI Token' --label signer --id 01 --pin 123456
+          module=$(dpkg -L libsofthsm2 | grep '/libsofthsm2.so$' | head -n 1)
+          pkcs11-tool --module "$module" --token-label 'Nitum CI Token' --login --pin 123456 --write-object "$RUNNER_TEMP/cert.der" --type cert --label signer --id 01
+          printf 'SOFTHSM2_CONF=%s\nNITUM_TEST_PKCS11_MODULE=%s\nNITUM_TEST_PKCS11_PIN=123456\n' "$SOFTHSM2_CONF" "$module" >> "$GITHUB_ENV"
+      - name: Test PAdES signing through PKCS11
+        run: cargo test --manifest-path native/Cargo.toml --test pkcs11_adapter --locked -- --ignored

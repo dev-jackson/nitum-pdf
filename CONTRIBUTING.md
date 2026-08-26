@@ -12,19 +12,55 @@
 
 ```bash
 git switch develop
-git switch -c release/0.3.0
-# actualizar la versión en pyproject.toml y src/pwviewpdf/__init__.py
-python -m pytest
+git switch -c release/<versión>
+# actualizar la versión en native/Cargo.toml y regenerar native/Cargo.lock
+cd native
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-targets --locked
+cd ..
 git switch main
 git merge --no-ff release/0.3.0
-git tag -s v0.3.0 -m "Nitum PDF 0.3.0"
+git tag -s v<versión> -m "Nitum PDF <versión>"
 git switch develop
 git merge --no-ff release/0.3.0
-git push origin main develop v0.3.0
+git push origin main develop v<versión>
 ```
 
-La etiqueta debe estar firmada. GitHub Actions genera el paquete y el checksum;
-no se deben adjuntar binarios construidos manualmente a un release oficial.
+La etiqueta debe estar firmada. GitHub Actions genera paquetes, checksums y
+attestations Sigstore verificables con `gh attestation verify`; no se deben
+adjuntar binarios construidos manualmente a un release oficial. La distribución
+0.6 publica únicamente Linux. macOS y Windows permanecen en las pruebas de
+paquetes y se habilitarán cuando sus credenciales de firma estén disponibles.
+
+### Credenciales de distribución
+
+Estas credenciales no son necesarias para el release Linux. Antes de habilitar
+macOS o Windows, configúralas con `gh secret set <NOMBRE>`. Nunca guardes
+certificados ni contraseñas en el árbol Git.
+Para cargarlos de forma guiada, sin imprimir valores ni crear copias temporales,
+ejecuta `packaging/native/configure-release-secrets.sh`. El script valida ambos
+PKCS#12 antes de solicitar confirmación y modificar GitHub.
+
+| Secreto | Contenido |
+|---|---|
+| `NITUM_APPLE_CERTIFICATE_BASE64` | PKCS#12 que contiene Developer ID Application y Developer ID Installer, codificado en Base64 |
+| `NITUM_APPLE_CERTIFICATE_PASSWORD` | Contraseña del PKCS#12 anterior |
+| `NITUM_APPLE_SIGN_IDENTITY` | Nombre completo de la identidad `Developer ID Application` |
+| `NITUM_APPLE_INSTALLER_IDENTITY` | Nombre completo de la identidad `Developer ID Installer` |
+| `NITUM_APPLE_ID` | Apple ID usado por `notarytool` |
+| `NITUM_APPLE_TEAM_ID` | Team ID de Apple Developer |
+| `NITUM_APPLE_APP_PASSWORD` | Contraseña específica de aplicación para notarización |
+| `NITUM_WINDOWS_CERTIFICATE_BASE64` | Certificado de firma de código PFX, codificado en Base64 |
+| `NITUM_WINDOWS_CERTIFICATE_PASSWORD` | Contraseña del PFX anterior |
+
+Antes de etiquetar, `gh secret list` debe mostrar los nueve nombres. Los valores
+no se imprimen. En macOS puedes confirmar los nombres locales con
+`security find-identity -v -p codesigning`; en Windows, el instalador y el
+ejecutable se verifican con `signtool verify /pa /v` dentro del workflow.
+
+El repositorio y los artefactos son íntegramente Rust/Slint: no se acepta añadir
+Python, entornos virtuales ni pasos `pip` a la aplicación, las pruebas o CI.
 
 ### Hotfix
 

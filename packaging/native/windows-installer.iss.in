@@ -1,0 +1,33 @@
+[Setup]
+AppId={{6A615604-9D36-48A0-AF0D-6F5516B92627}
+AppName=Nitum PDF
+AppVersion=@VERSION@
+DefaultDirName={autopf}\Nitum PDF
+DefaultGroupName=Nitum PDF
+OutputDir=@OUTPUT_DIR@
+OutputBaseFilename=nitum-pdf-@VERSION@-windows-x86_64
+Compression=lzma2
+SolidCompression=yes
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+PrivilegesRequired=admin
+UninstallDisplayIcon={app}\nitum-pdf.exe
+WizardStyle=modern
+SetupIconFile=@ICON_FILE@
+ChangesAssociations=yes
+CloseApplications=yes
+RestartApplications=yes
+
+[Files]
+Source: "@BINARY_DIR@\nitum-pdf.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "@BINARY_DIR@\pdfium.dll"; DestDir: "{app}"; Flags: ignoreversion
+
+[Icons]
+Name: "{autoprograms}\Nitum PDF"; Filename: "{app}\nitum-pdf.exe"
+
+[Registry]
+Root: HKA; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "NitumPDF.Document"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\NitumPDF.Document"; ValueType: string; ValueName: ""; ValueData: "Documento PDF"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\NitumPDF.Document\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\nitum-pdf.exe,0"
+Root: HKA; Subkey: "Software\Classes\NitumPDF.Document\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\nitum-pdf.exe"" ""%1"""
+Root: HKA; Subkey: "Software\Classes\Applications\nitum-pdf.exe\SupportedTypes"; ValueType: string; ValueName: ".pdf"; ValueData: ""

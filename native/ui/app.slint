@@ -1,0 +1,832 @@
+import { Button, LineEdit, ListView, Palette as SystemPalette, ProgressIndicator, ScrollView } from "std-widgets.slint";
+
+export struct PageItem {
+    number: int,
+    image: image,
+    aspect: float,
+    loaded: bool,
+    error: string,
+}
+
+export global Palette {
+    // Sigue el sistema hasta que la persona elige explícitamente Claro u Oscuro.
+    in-out property <bool> dark: SystemPalette.color-scheme == ColorScheme.dark;
+    out property <color> canvas: dark ? #111318 : #f3f5f9;
+    out property <color> surface: dark ? #1b1e25 : #ffffff;
+    out property <color> elevated: dark ? #242832 : #ffffff;
+    out property <color> text: dark ? #f7f8fb : #151923;
+    out property <color> muted: dark ? #a7adba : #667085;
+    out property <color> line: dark ? #ffffff18 : #10182816;
+    out property <color> accent: #2563eb;
+    out property <color> accent-hover: #1d4ed8;
+    out property <color> success: #16a66a;
+    out property <color> warning: #d29400;
+}
+
+component IconButton inherits Rectangle {
+    in property <string> icon;
+    in property <string> hint;
+    callback clicked;
+    width: 40px; height: 40px; border-radius: 12px;
+    background: touch.has-hover ? Palette.line : transparent;
+    border-width: key-focus.has-focus ? 2px : 0px; border-color: Palette.accent;
+    accessible-role: button;
+    accessible-label: hint;
+    Text { text: root.icon; color: Palette.text; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
+    key-focus := FocusScope {
+        x: 0; width: 0px; focus-on-tab-navigation: true;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") { root.clicked(); return accept; }
+            return reject;
+        }
+    }
+    touch := TouchArea { clicked => { key-focus.focus(); root.clicked(); } }
+}
+
+component HeaderButton inherits Rectangle {
+    in property <string> label;
+    in property <string> hint: label;
+    callback clicked;
+    width: 68px; height: 40px; border-radius: 12px;
+    background: touch.has-hover ? Palette.line : transparent;
+    border-width: key-focus.has-focus ? 2px : 0px; border-color: Palette.accent;
+    accessible-role: button;
+    accessible-label: hint;
+    Text { text: root.label; color: Palette.text; font-size: 13px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+    key-focus := FocusScope {
+        x: 0; width: 0px; focus-on-tab-navigation: true;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") { root.clicked(); return accept; }
+            return reject;
+        }
+    }
+    touch := TouchArea { clicked => { key-focus.focus(); root.clicked(); } }
+}
+
+component PrimaryButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback clicked;
+    height: 42px; min-width: 120px; border-radius: 13px;
+    opacity: enabled ? 1 : 0.45;
+    background: touch.pressed ? #1746b5 : touch.has-hover ? Palette.accent-hover : Palette.accent;
+    border-width: key-focus.has-focus ? 2px : 0px; border-color: white;
+    accessible-role: button; accessible-label: label;
+    Text { text: root.label; color: white; font-weight: 700; font-size: 14px; horizontal-alignment: center; vertical-alignment: center; }
+    key-focus := FocusScope {
+        x: 0; width: 0px; enabled: root.enabled; focus-on-tab-navigation: true;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") { root.clicked(); return accept; }
+            return reject;
+        }
+    }
+    touch := TouchArea { enabled: root.enabled; clicked => { key-focus.focus(); root.clicked(); } }
+}
+
+component IntentCard inherits Rectangle {
+    in property <string> icon;
+    in property <string> title;
+    in property <string> detail;
+    in property <string> action;
+    in property <bool> primary: false;
+    callback selected;
+    height: 76px; border-radius: 14px; background: touch.has-hover ? Palette.line : Palette.elevated;
+    border-width: key-focus.has-focus ? 2px : 1px; border-color: key-focus.has-focus ? Palette.accent : Palette.line;
+    accessible-role: button; accessible-label: title + ". " + detail;
+    HorizontalLayout {
+        padding: 14px; spacing: 14px;
+        Rectangle {
+            width: 38px; height: 38px; border-radius: 12px; background: #2563eb18;
+            Text { text: root.icon; color: Palette.accent; font-size: 15px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+        }
+        VerticalLayout {
+            alignment: center; spacing: 3px;
+            Text { text: root.title; color: Palette.text; font-size: 14px; font-weight: 600; }
+            Text { text: root.detail; color: Palette.muted; font-size: 12px; }
+        }
+        Rectangle { horizontal-stretch: 1; }
+        Rectangle {
+            width: 98px; height: 36px; border-radius: 11px;
+            background: root.primary ? Palette.accent : Palette.line;
+            Text { text: root.action; color: root.primary ? white : Palette.text; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+        }
+    }
+    key-focus := FocusScope {
+        x: 0; width: 0px; focus-on-tab-navigation: true;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") { root.selected(); return accept; }
+            return reject;
+        }
+    }
+    touch := TouchArea { clicked => { key-focus.focus(); root.selected(); } }
+}
+
+component LevelButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> selected;
+    callback clicked;
+    width: 88px; height: 34px; border-radius: 10px;
+    background: selected ? Palette.accent : touch.has-hover ? Palette.line : Palette.elevated;
+    border-width: key-focus.has-focus ? 2px : 1px; border-color: selected || key-focus.has-focus ? Palette.accent : Palette.line;
+    accessible-role: button; accessible-label: label; accessible-checked: selected;
+    Text { text: root.label; color: selected ? white : Palette.text; font-size: 12px; font-weight: selected ? 700 : 500; horizontal-alignment: center; vertical-alignment: center; }
+    key-focus := FocusScope {
+        x: 0; width: 0px; focus-on-tab-navigation: true;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") { root.clicked(); return accept; }
+            return reject;
+        }
+    }
+    touch := TouchArea { clicked => { key-focus.focus(); root.clicked(); } }
+}
+
+component ToggleOption inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <string> label;
+    height: 32px; background: transparent;
+    accessible-role: checkbox; accessible-label: label; accessible-checked: checked;
+    border-width: key-focus.has-focus ? 2px : 0px; border-color: Palette.accent; border-radius: 7px;
+    HorizontalLayout {
+        spacing: 10px; alignment: center;
+        Rectangle {
+            width: 18px; height: 18px; border-radius: 5px;
+            background: root.checked ? Palette.accent : Palette.elevated;
+            border-width: 1px; border-color: root.checked ? Palette.accent : Palette.line;
+            Text { text: root.checked ? "✓" : ""; color: white; font-size: 12px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+        }
+        Text { text: root.label; color: Palette.text; font-size: 12px; vertical-alignment: center; }
+    }
+    key-focus := FocusScope {
+        x: 0; width: 0px; focus-on-tab-navigation: true;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") { root.checked = !root.checked; return accept; }
+            return reject;
+        }
+    }
+    TouchArea { clicked => { key-focus.focus(); root.checked = !root.checked; } }
+}
+
+export component AppWindow inherits Window {
+    title: document-open ? document-title + " — Nitum PDF" : "Nitum PDF";
+    preferred-width: 1180px; preferred-height: 820px;
+    min-width: 720px; min-height: 560px;
+    background: Palette.canvas;
+    property <bool> effective-dark-theme: Palette.dark;
+    init => {
+        SystemPalette.color-scheme = effective-dark-theme ? ColorScheme.dark : ColorScheme.light;
+        root.compact-header = root.width < 900px;
+    }
+    changed effective-dark-theme => { SystemPalette.color-scheme = effective-dark-theme ? ColorScheme.dark : ColorScheme.light; }
+    changed width => { root.compact-header = root.width < 900px; }
+
+    in-out property <bool> document-open: false;
+    in-out property <string> document-title: "Nitum PDF";
+    in-out property <string> document-path: "";
+    in-out property <int> current-page: 0;
+    in-out property <int> page-count: 0;
+    in-out property <int> zoom-percent: 100;
+    in-out property <int> active-dialog: 0;
+    in-out property <bool> document-loading: false;
+    in-out property <string> document-error: "";
+    in-out property <image> page-image;
+    in-out property <float> page-aspect: 1.414;
+    in-out property <bool> search-open: false;
+    in-out property <string> search-status: "";
+    in-out property <string> viewer-status: "";
+    in-out property <string> identity-path: "";
+    in-out property <string> identity-name: "";
+    in-out property <[string]> identity-options: [];
+    in-out property <bool> signing-busy: false;
+    in-out property <bool> signing-success: false;
+    in-out property <string> signing-status: "";
+    in-out property <bool> unlock-busy: false;
+    in-out property <string> unlock-status: "";
+    in-out property <bool> update-available: false;
+    in-out property <bool> update-checking: false;
+    in-out property <string> current-version: "";
+    in-out property <string> update-version: "";
+    in-out property <bool> update-busy: false;
+    in-out property <string> update-status: "";
+    in-out property <bool> verification-busy: false;
+    in-out property <bool> verification-success: false;
+    in-out property <string> verification-status: "";
+    in-out property <int> pades-level: 0;
+    // -1 = approval signature; 1..3 = DocMDP certification permission.
+    in-out property <int> certification-permission: -1;
+    in-out property <string> appearance-path: "";
+    in-out property <string> appearance-name: "";
+    in-out property <[string]> appearance-options: [];
+    private property <int> appearance-return-dialog: 1;
+    in-out property <int> identity-kind: 0;
+    in-out property <string> token-label: "";
+    in-out property <string> token-status: "";
+    in-out property <[string]> token-options: [];
+    in-out property <[PageItem]> pages: [];
+    in-out property <int> scroll-page: 0;
+    in-out property <length> pages-scroll-y: 0px;
+    in-out property <bool> placement-mode: false;
+    in-out property <bool> selection-mode: false;
+    private property <bool> selection-active: false;
+    private property <float> selection-start-x: 0;
+    private property <float> selection-start-y: 0;
+    private property <float> selection-current-x: 0;
+    private property <float> selection-current-y: 0;
+    in-out property <bool> signature-position-set: false;
+    in-out property <int> signature-page: 0;
+    in-out property <float> signature-x: 0;
+    in-out property <float> signature-y: 0;
+    private property <bool> compact-header: false;
+
+    callback open-document;
+    callback show-signature-center;
+    callback close-dialog;
+    callback choose-signing;
+    callback previous-page;
+    callback next-page;
+    callback zoom-out;
+    callback zoom-in;
+    callback fit-width;
+    callback search-document(string);
+    callback copy-current-page;
+    callback copy-selection(int, float, float, float, float);
+    callback select-identity;
+    callback show-identity-library;
+    callback choose-identity(int);
+    callback sign-with-identity(string, int, int, string, string, bool);
+    callback unlock-document(string);
+    callback cancel-unlock;
+    callback check-updates;
+    callback install-update;
+    callback verify-signatures;
+    callback select-appearance;
+    callback show-appearance-library;
+    callback choose-appearance(int);
+    callback discover-tokens;
+    callback select-token-module;
+    callback choose-token(int);
+    callback request-page(int);
+    callback visible-page(int);
+    changed scroll-page => {
+        root.pages-scroll-y = 0px - root.scroll-page * (760px * 1.414 * root.zoom-percent / 100 + 32px);
+    }
+    changed pages-scroll-y => {
+        root.visible-page(max(0, round((0px - root.pages-scroll-y) / (760px * 1.414 * root.zoom-percent / 100 + 32px))));
+    }
+
+    forward-focus: shortcuts;
+    shortcuts := FocusScope {
+        KeyBinding { keys: @keys(Control + O); activated => { root.open-document(); } }
+        KeyBinding { keys: @keys(Control + F); activated => { root.search-open = true; } }
+        KeyBinding { keys: @keys(Control + K); activated => { root.search-open = true; } }
+        KeyBinding { keys: @keys(Control + Shift + S); enabled: root.document-open; activated => { root.show-signature-center(); } }
+        KeyBinding { keys: @keys(Control + "0"); enabled: root.document-open; activated => { root.fit-width(); } }
+        KeyBinding { keys: @keys(Control + C); enabled: root.document-open && !root.search-open; activated => { root.copy-current-page(); } }
+        KeyBinding { keys: @keys(Meta + O); activated => { root.open-document(); } }
+        KeyBinding { keys: @keys(Meta + F); activated => { root.search-open = true; } }
+        KeyBinding { keys: @keys(Meta + K); activated => { root.search-open = true; } }
+        KeyBinding { keys: @keys(Meta + Shift + S); enabled: root.document-open; activated => { root.show-signature-center(); } }
+        KeyBinding { keys: @keys(Meta + "0"); enabled: root.document-open; activated => { root.fit-width(); } }
+        KeyBinding { keys: @keys(Meta + C); enabled: root.document-open && !root.search-open; activated => { root.copy-current-page(); } }
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                if (root.placement-mode) {
+                    root.placement-mode = false;
+                    root.active-dialog = 2;
+                    root.viewer-status = "Colocación cancelada";
+                }
+                else if (root.selection-mode) {
+                    root.selection-mode = false;
+                    root.selection-active = false;
+                    root.viewer-status = "Selección cancelada";
+                }
+                else if (root.active-dialog > 0) { root.close-dialog(); }
+                else if (root.search-open) { root.search-open = false; root.search-status = ""; }
+                return accept;
+            }
+            return reject;
+        }
+
+    VerticalLayout {
+        spacing: 0px;
+        Rectangle {
+            height: 64px; background: Palette.surface; border-width: 1px; border-color: Palette.line;
+            HorizontalLayout {
+                padding-left: 18px; padding-right: 18px; spacing: 10px; alignment: center;
+                HeaderButton { label: root.compact-header ? "+ PDF" : "Abrir"; hint: "Abrir un PDF"; clicked => { root.open-document(); } }
+                Rectangle { horizontal-stretch: 1; }
+                if !root.search-open && !root.compact-header: VerticalLayout {
+                    alignment: center; spacing: 1px;
+                    Text { text: root.document-open ? root.document-title : "Nitum PDF"; color: Palette.text; font-weight: 700; horizontal-alignment: center; }
+                    Text { visible: root.document-open; text: "Documento local"; color: Palette.muted; font-size: 11px; horizontal-alignment: center; }
+                }
+                if root.search-open: HorizontalLayout {
+                    spacing: 8px; alignment: center;
+                    search-input := LineEdit {
+                        width: root.compact-header ? 180px : 300px; placeholder-text: "Buscar en el PDF";
+                        accessible-label: "Buscar texto en el PDF";
+                        accepted(value) => { root.search-document(value); }
+                    }
+                    Text { text: root.search-status; color: Palette.muted; font-size: 12px; vertical-alignment: center; }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                HeaderButton { label: root.search-open ? "Cerrar" : "Buscar"; hint: "Buscar en el documento"; clicked => { root.search-open = !root.search-open; root.search-status = ""; } }
+                HeaderButton { label: root.compact-header ? "Tema" : (Palette.dark ? "Claro" : "Oscuro"); hint: "Cambiar apariencia"; clicked => { Palette.dark = !Palette.dark; } }
+                HeaderButton { label: root.compact-header ? (root.update-available ? "Nueva" : "Info") : (root.update-available ? "Actualizar" : "Versión"); hint: root.update-available ? "Hay una versión nueva" : "Buscar actualizaciones"; clicked => { root.check-updates(); } }
+                PrimaryButton { width: root.compact-header ? 104px : 144px; label: root.compact-header ? "Firmar" : "Firmar este PDF"; enabled: root.document-open; clicked => { root.show-signature-center(); } }
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1; background: Palette.canvas;
+            if !root.document-open: Rectangle {
+                width: min(parent.width - 32px, 680px); height: 390px;
+                x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2 - 18px;
+                border-radius: 28px; background: Palette.surface;
+                border-width: 1px; border-color: Palette.line;
+                drop-shadow-blur: 32px; drop-shadow-color: #10182818; drop-shadow-offset-y: 12px;
+                VerticalLayout {
+                    alignment: center; spacing: 18px; padding: 54px;
+                    HorizontalLayout {
+                        Rectangle { horizontal-stretch: 1; }
+                        Rectangle {
+                            width: 88px; height: 88px; border-radius: 26px; background: #2563eb18;
+                            Text { text: "✓"; color: Palette.accent; font-size: 42px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                    }
+                    Text { text: "Tu documento, listo para avanzar"; color: Palette.text; font-size: 28px; font-weight: 700; horizontal-alignment: center; }
+                    Text { text: "Lee, busca y firma PDF sin subirlos a ningún servidor."; color: Palette.muted; font-size: 15px; horizontal-alignment: center; }
+                    HorizontalLayout {
+                        Rectangle { horizontal-stretch: 1; }
+                        PrimaryButton { width: 190px; label: "Abrir un PDF"; clicked => { root.open-document(); } }
+                        Rectangle { horizontal-stretch: 1; }
+                    }
+                }
+            }
+            if root.document-open: Rectangle {
+                pages-view := ListView {
+                    viewport-y <=> root.pages-scroll-y;
+                    for page[index] in root.pages: Rectangle {
+                        height: 760px * root.zoom-percent / 100 * page.aspect + 32px;
+                        init => { root.request-page(index); }
+                        Rectangle {
+                            x: (parent.width - self.width) / 2; y: 16px;
+                            width: 760px * root.zoom-percent / 100; height: self.width * page.aspect;
+                            background: white; border-radius: 3px;
+                            accessible-role: image;
+                            accessible-label: "Página " + page.number + " de " + root.page-count;
+                            drop-shadow-blur: 24px; drop-shadow-color: #10182824; drop-shadow-offset-y: 10px;
+                            if page.loaded: Image { source: page.image; image-fit: contain; }
+                            if !page.loaded && page.error == "": VerticalLayout {
+                                alignment: center; spacing: 10px;
+                                ProgressIndicator { indeterminate: true; width: 140px; height: 3px; }
+                                Text { text: "Página " + page.number; color: #667085; horizontal-alignment: center; }
+                            }
+                            if page.error != "": Text { text: page.error; color: #b42318; wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center; }
+                            if root.placement-mode: Rectangle {
+                                background: #2563eb18; border-width: 2px; border-color: Palette.accent;
+                                Text {
+                                    text: "Haz clic donde quieres mostrar la firma";
+                                    color: #1746b5; font-weight: 700;
+                                    horizontal-alignment: center; vertical-alignment: center;
+                                }
+                                place := TouchArea {
+                                    clicked => {
+                                        root.signature-page = index;
+                                        root.signature-x = place.mouse-x / parent.width;
+                                        root.signature-y = place.mouse-y / parent.height;
+                                        root.signature-position-set = true;
+                                        root.placement-mode = false;
+                                        root.viewer-status = "Posición elegida en la página " + (index + 1);
+                                        root.active-dialog = 2;
+                                    }
+                                }
+                            }
+                            if root.selection-mode: Rectangle {
+                                background: #2563eb0d;
+                                border-width: 2px; border-color: Palette.accent;
+                                Text {
+                                    visible: !root.selection-active;
+                                    y: 24px; height: 44px;
+                                    text: "Arrastra sobre el texto que quieres copiar";
+                                    color: #1746b5; font-weight: 700;
+                                    horizontal-alignment: center; vertical-alignment: center;
+                                }
+                                if root.selection-active: Rectangle {
+                                    x: min(root.selection-start-x, root.selection-current-x) * parent.width;
+                                    y: min(root.selection-start-y, root.selection-current-y) * parent.height;
+                                    width: abs(root.selection-current-x - root.selection-start-x) * parent.width;
+                                    height: abs(root.selection-current-y - root.selection-start-y) * parent.height;
+                                    background: #2563eb38; border-width: 1px; border-color: Palette.accent;
+                                }
+                                select-area := TouchArea {
+                                    pointer-event(event) => {
+                                        if event.kind == PointerEventKind.down {
+                                            root.selection-active = true;
+                                            root.selection-start-x = select-area.mouse-x / parent.width;
+                                            root.selection-start-y = select-area.mouse-y / parent.height;
+                                            root.selection-current-x = root.selection-start-x;
+                                            root.selection-current-y = root.selection-start-y;
+                                        } else if event.kind == PointerEventKind.move && root.selection-active {
+                                            root.selection-current-x = select-area.mouse-x / parent.width;
+                                            root.selection-current-y = select-area.mouse-y / parent.height;
+                                        } else if event.kind == PointerEventKind.up && root.selection-active {
+                                            root.selection-current-x = select-area.mouse-x / parent.width;
+                                            root.selection-current-y = select-area.mouse-y / parent.height;
+                                            root.copy-selection(index, root.selection-start-x, root.selection-start-y, root.selection-current-x, root.selection-current-y);
+                                            root.selection-active = false;
+                                            root.selection-mode = false;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if root.document-loading: VerticalLayout {
+                    alignment: center; spacing: 12px;
+                    ProgressIndicator { indeterminate: true; width: 160px; height: 3px; }
+                    Text { text: "Preparando documento…"; color: Palette.muted; horizontal-alignment: center; }
+                }
+                if root.document-error != "": VerticalLayout {
+                    alignment: center; spacing: 12px; padding: 64px;
+                    Text { text: "No pudimos mostrar este PDF"; color: #b42318; font-size: 20px; font-weight: 700; horizontal-alignment: center; }
+                    Text { text: root.document-error; color: Palette.muted; wrap: word-wrap; horizontal-alignment: center; }
+                    Button { text: "Elegir otro PDF"; clicked => { root.open-document(); } }
+                }
+            }
+            if root.viewer-status != "" && root.active-dialog == 0 && !root.placement-mode: Rectangle {
+                x: (parent.width - self.width) / 2; y: 18px;
+                width: 300px; height: 42px; border-radius: 13px;
+                background: Palette.elevated; border-width: 1px; border-color: Palette.line;
+                Text { text: root.viewer-status; color: Palette.text; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+            }
+            if root.document-open && !root.placement-mode && !root.selection-mode: Rectangle {
+                x: (parent.width - self.width) / 2; y: parent.height - self.height - 20px;
+                width: 680px; height: 52px; border-radius: 17px; background: Palette.elevated;
+                border-width: 1px; border-color: Palette.line; drop-shadow-blur: 22px; drop-shadow-color: #10182830; drop-shadow-offset-y: 8px;
+                HorizontalLayout {
+                    padding: 7px; spacing: 8px; alignment: center;
+                    IconButton { icon: "<"; hint: "Página anterior"; clicked => { root.previous-page(); } }
+                    Text { text: "Página"; color: Palette.muted; font-size: 12px; }
+                    Rectangle { width: 42px; height: 34px; border-radius: 10px; background: Palette.line; Text { text: root.current-page; color: Palette.text; horizontal-alignment: center; vertical-alignment: center; } }
+                    Text { text: "de " + root.page-count; color: Palette.muted; }
+                    IconButton { icon: ">"; hint: "Página siguiente"; clicked => { root.next-page(); } }
+                    Rectangle { width: 1px; height: 24px; background: Palette.line; }
+                    IconButton { icon: "-"; hint: "Alejar"; clicked => { root.zoom-out(); } }
+                    IconButton { icon: "+"; hint: "Acercar"; clicked => { root.zoom-in(); } }
+                    Text { text: root.zoom-percent + "%"; color: Palette.text; font-weight: 700; }
+                    HeaderButton { width: 70px; label: "Ajustar"; hint: "Ajustar al ancho"; clicked => { root.fit-width(); } }
+                    HeaderButton { width: 82px; label: "Seleccionar"; hint: "Seleccionar una zona de texto"; clicked => { root.selection-mode = true; root.viewer-status = "Arrastra sobre el texto que quieres copiar · Esc para cancelar"; } }
+                    HeaderButton { width: 72px; label: "Copiar"; hint: "Copiar el texto de la página actual"; clicked => { root.copy-current-page(); } }
+                }
+            }
+            if root.document-open && root.selection-mode: Rectangle {
+                x: (parent.width - self.width) / 2; y: parent.height - self.height - 20px;
+                width: 500px; height: 56px; border-radius: 17px;
+                background: Palette.elevated; border-width: 1px; border-color: Palette.line;
+                HorizontalLayout {
+                    padding-top: 8px; padding-bottom: 8px; padding-left: 12px; padding-right: 8px;
+                    spacing: 12px; alignment: center;
+                    Text { text: "Selecciona una zona para copiar su texto"; color: Palette.text; font-weight: 700; }
+                    Rectangle { horizontal-stretch: 1; }
+                    Button { text: "Cancelar"; clicked => { root.selection-mode = false; root.selection-active = false; root.viewer-status = "Selección cancelada"; } }
+                }
+            }
+            if root.document-open && root.placement-mode: Rectangle {
+                x: (parent.width - self.width) / 2; y: parent.height - self.height - 20px;
+                width: 500px; height: 56px; border-radius: 17px;
+                background: Palette.elevated; border-width: 1px; border-color: Palette.line;
+                drop-shadow-blur: 22px; drop-shadow-color: #10182830; drop-shadow-offset-y: 8px;
+                HorizontalLayout {
+                    padding-top: 8px; padding-bottom: 8px; padding-left: 12px; padding-right: 8px;
+                    spacing: 12px; alignment: center;
+                    Text { text: "Elige dónde mostrar la firma"; color: Palette.text; font-weight: 700; }
+                    Rectangle { horizontal-stretch: 1; }
+                    Button {
+                        text: "Cancelar";
+                        clicked => {
+                            root.placement-mode = false;
+                            root.active-dialog = 2;
+                            root.viewer-status = "Colocación cancelada";
+                        }
+                    }
+                }
+            }
+        }
+    }
+    }
+
+    if root.active-dialog > 0: Rectangle {
+        background: #00000066;
+        TouchArea { }
+        Rectangle {
+            width: min(parent.width - 32px, root.active-dialog == 1 ? 620px : root.active-dialog == 3 || root.active-dialog == 4 ? 480px : 640px);
+            height: root.active-dialog == 1 ? min(parent.height - 32px, 570px) : root.active-dialog == 2 ? min(parent.height - 32px, 650px) : root.active-dialog == 3 ? 390px : root.active-dialog == 4 ? 360px : min(parent.height - 32px, 560px);
+            x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+            border-radius: 22px; background: Palette.surface; border-width: 1px; border-color: Palette.line;
+            drop-shadow-blur: 38px; drop-shadow-color: #00000055; drop-shadow-offset-y: 14px;
+            if root.active-dialog == 1: VerticalLayout {
+                padding: 24px; spacing: 14px;
+                HorizontalLayout {
+                    Text { text: "¿Qué necesitas hacer?"; color: Palette.text; font-size: 26px; font-weight: 700; }
+                    Rectangle { horizontal-stretch: 1; }
+                    IconButton { icon: "×"; hint: "Cerrar"; clicked => { root.close-dialog(); } }
+                }
+                Text { text: "Elige según tu intención. Siempre explicaremos qué ocurrirá antes de cambiar el PDF."; color: Palette.muted; font-size: 13px; }
+                IntentCard { icon: "ID"; title: "Firmar con mi identidad"; detail: "Archivo .p12/.pfx, tarjeta o token criptográfico"; action: "Continuar"; primary: true; selected => { root.choose-signing(); } }
+                IntentCard { icon: "✓"; title: "Comprobar firmas"; detail: "Integridad, titular y confianza del certificado"; action: "Comprobar"; selected => { root.verify-signatures(); } }
+                IntentCard { icon: "IMG"; title: "Mis firmas visuales"; detail: "Guarda y reutiliza tu rúbrica junto a datos verificables"; action: "Abrir"; selected => { root.appearance-return-dialog = 1; root.show-appearance-library(); } }
+                IntentCard { icon: "USB"; title: "Conectar tarjeta o DNI"; detail: "OpenSC, p11-kit y dispositivos PKCS#11"; action: "Buscar"; selected => { root.discover-tokens(); } }
+            }
+            if root.active-dialog == 2: signing-scroll := ScrollView {
+              height: parent.height - 58px;
+              viewport-width: self.width;
+              VerticalLayout {
+                width: parent.width;
+                padding: 24px; spacing: 12px;
+                HorizontalLayout {
+                    Button { text: "Atrás"; clicked => { root.active-dialog = 1; } }
+                    Rectangle { horizontal-stretch: 1; }
+                    Text { text: "Confirmar firma"; color: Palette.text; font-weight: 700; vertical-alignment: center; }
+                    Rectangle { horizontal-stretch: 1; }
+                    PrimaryButton {
+                        label: root.signing-busy ? "Firmando…" : "Firmar y guardar";
+                        enabled: (root.identity-path != "" || root.identity-kind == 1) && !root.signing-busy;
+                        clicked => {
+                            root.sign-with-identity(secret-input.text, root.pades-level, root.certification-permission, reason-input.text, location-input.text, visible-input.checked);
+                            secret-input.text = "";
+                        }
+                    }
+                }
+                Text { text: "Elige tu identidad digital"; color: Palette.text; font-size: 18px; font-weight: 700; }
+                Rectangle {
+                    height: 86px; border-radius: 14px; background: Palette.elevated; border-width: 1px; border-color: Palette.line;
+                    HorizontalLayout {
+                        padding: 16px; spacing: 12px;
+                        VerticalLayout {
+                            alignment: center; spacing: 4px;
+                            Text { text: root.identity-kind == 1 ? root.token-label : root.identity-name == "" ? "Archivo .p12 o .pfx" : root.identity-name; color: Palette.text; font-weight: 600; }
+                            Text { text: root.identity-kind == 1 ? "La clave privada nunca sale de la tarjeta" : root.identity-name == "" ? "Compatible con exportaciones de Adobe, Windows y autoridades certificadoras" : "La clave privada permanece en este equipo"; color: Palette.muted; font-size: 11px; }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        Button { text: "Archivo"; clicked => { root.show-identity-library(); } }
+                        Button { text: "Tarjeta"; clicked => { root.discover-tokens(); } }
+                    }
+                }
+                Text { text: root.identity-kind == 1 ? "PIN de la tarjeta" : "Contraseña de la identidad"; color: Palette.text; font-size: 13px; font-weight: 600; }
+                secret-input := LineEdit {
+                    enabled: (root.identity-path != "" || root.identity-kind == 1) && !root.signing-busy;
+                    input-type: password;
+                    placeholder-text: "Se usa una vez y no se guarda";
+                    accessible-label: root.identity-kind == 1 ? "PIN de la tarjeta" : "Contraseña de la identidad digital";
+                    accepted(value) => {
+                        if (root.identity-path != "" || root.identity-kind == 1) && !root.signing-busy {
+                            root.sign-with-identity(value, root.pades-level, root.certification-permission, reason-input.text, location-input.text, visible-input.checked);
+                            self.text = "";
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    Text { text: "Nivel PAdES"; color: Palette.text; font-size: 12px; vertical-alignment: center; }
+                    LevelButton { label: "B-B"; selected: root.pades-level == 0; clicked => { root.pades-level = 0; } }
+                    LevelButton { label: "B-T"; selected: root.pades-level == 1; clicked => { root.pades-level = 1; } }
+                    LevelButton { label: "B-LT"; selected: root.pades-level == 2; clicked => { root.pades-level = 2; } }
+                    LevelButton { label: "B-LTA"; selected: root.pades-level == 3; clicked => { root.pades-level = 3; } }
+                    Text {
+                        text: root.pades-level == 3 ? "Archivo" : root.pades-level == 2 ? "Validación duradera" : root.pades-level == 1 ? "Con sello de tiempo" : "Básica";
+                        color: Palette.muted; font-size: 11px; vertical-alignment: center;
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    Text { text: "Uso"; color: Palette.text; font-size: 12px; vertical-alignment: center; }
+                    LevelButton { label: "Aprobación"; selected: root.certification-permission == -1; clicked => { root.certification-permission = -1; signing-scroll.viewport-y = 0px; } }
+                    LevelButton { label: "Certificar"; selected: root.certification-permission != -1; clicked => { root.certification-permission = 2; signing-scroll.viewport-y = 0px; } }
+                    Text { text: root.certification-permission == -1 ? "Permite firmas sucesivas" : "Debe ser la primera firma"; color: Palette.muted; font-size: 11px; vertical-alignment: center; }
+                }
+                if root.certification-permission != -1: HorizontalLayout {
+                    spacing: 8px;
+                    Text { text: "Cambios permitidos"; color: Palette.text; font-size: 12px; vertical-alignment: center; }
+                    LevelButton { label: "Ninguno"; selected: root.certification-permission == 1; clicked => { root.certification-permission = 1; } }
+                    LevelButton { label: "Formularios"; selected: root.certification-permission == 2; clicked => { root.certification-permission = 2; } }
+                    LevelButton { label: "+ Anotaciones"; selected: root.certification-permission == 3; clicked => { root.certification-permission = 3; } }
+                }
+                HorizontalLayout {
+                    spacing: 10px;
+                    reason-input := LineEdit { placeholder-text: "Motivo (opcional)"; accessible-label: "Motivo de la firma, opcional"; }
+                    location-input := LineEdit { placeholder-text: "Ubicación (opcional)"; accessible-label: "Ubicación de la firma, opcional"; }
+                }
+                visible-input := ToggleOption { label: "Mostrar firma verificable en la página actual"; checked: true; }
+                HorizontalLayout {
+                    visible: visible-input.checked;
+                    spacing: 10px;
+                    Text {
+                        text: root.signature-position-set ? "Posición: página " + (root.signature-page + 1) : "Posición: esquina inferior izquierda";
+                        color: Palette.muted; font-size: 11px; vertical-alignment: center;
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Button {
+                        text: root.signature-position-set ? "Cambiar posición" : "Elegir posición";
+                        clicked => {
+                            root.placement-mode = true;
+                            root.active-dialog = 0;
+                            root.viewer-status = "Selecciona una posición en el documento · Esc para cancelar";
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 10px;
+                    Text { text: root.appearance-name == "" ? "Apariencia: datos verificables" : "Apariencia: " + root.appearance-name; color: Palette.muted; font-size: 11px; vertical-alignment: center; }
+                    Rectangle { horizontal-stretch: 1; }
+                    Button { text: "Guardadas"; clicked => { root.appearance-return-dialog = 2; root.show-appearance-library(); } }
+                    Button { text: "Añadir"; clicked => { root.select-appearance(); } }
+                }
+                Text { text: "Se creará un PDF nuevo y el original no se modificará."; color: Palette.muted; font-size: 12px; }
+                if root.signing-status != "": Rectangle {
+                    height: 56px; border-radius: 12px;
+                    background: root.signing-success ? #16a66a18 : #d92d2018;
+                    Text { text: root.signing-status; color: root.signing-success ? Palette.success : #d92d20; wrap: word-wrap; vertical-alignment: center; horizontal-alignment: center; }
+                }
+                Rectangle { height: 8px; }
+              }
+            }
+            if root.active-dialog == 2: Rectangle {
+                y: parent.height - 58px; width: parent.width; height: 58px;
+                background: Palette.surface;
+                Rectangle { height: 1px; background: Palette.line; }
+                Button {
+                    x: 24px; y: 10px; width: parent.width - 48px;
+                    text: "Cancelar";
+                    clicked => { root.placement-mode = false; root.close-dialog(); }
+                }
+            }
+            if root.active-dialog == 3: VerticalLayout {
+                padding: 28px; spacing: 16px;
+                HorizontalLayout {
+                    Text { text: "PDF protegido"; color: Palette.text; font-size: 24px; font-weight: 700; }
+                    Rectangle { horizontal-stretch: 1; }
+                    IconButton { icon: "×"; hint: "Cancelar apertura"; clicked => { root.cancel-unlock(); } }
+                }
+                Text {
+                    text: "Introduce la contraseña para abrirlo. Se usará una sola vez y nunca se guardará.";
+                    color: Palette.muted; font-size: 13px; wrap: word-wrap;
+                }
+                unlock-input := LineEdit {
+                    enabled: !root.unlock-busy;
+                    input-type: password;
+                    placeholder-text: "Contraseña del PDF";
+                    accessible-label: "Contraseña para abrir el PDF";
+                    accepted(value) => {
+                        if !root.unlock-busy && value != "" {
+                            root.unlock-document(value);
+                            self.text = "";
+                        }
+                    }
+                }
+                if root.unlock-status != "": Text {
+                    text: root.unlock-status; color: #d92d20; font-size: 12px; wrap: word-wrap;
+                }
+                Rectangle { vertical-stretch: 1; }
+                HorizontalLayout {
+                    alignment: end; spacing: 10px;
+                    Button { text: "Cancelar"; enabled: !root.unlock-busy; clicked => { root.cancel-unlock(); } }
+                    PrimaryButton {
+                        label: root.unlock-busy ? "Abriendo…" : "Abrir PDF";
+                        enabled: !root.unlock-busy;
+                        clicked => {
+                            if unlock-input.text != "" {
+                                root.unlock-document(unlock-input.text);
+                                unlock-input.text = "";
+                            }
+                        }
+                    }
+                }
+            }
+            if root.active-dialog == 4: VerticalLayout {
+                padding: 28px; spacing: 16px;
+                Text {
+                    text: root.update-checking ? "Buscando actualizaciones…" : root.update-available ? "Nitum PDF " + root.update-version + " está disponible" : "Nitum PDF está actualizado";
+                    color: Palette.text; font-size: 23px; font-weight: 700; wrap: word-wrap;
+                }
+                Text {
+                    text: root.update-available ? "Descargaremos el instalador oficial desde GitHub y comprobaremos su SHA-256 antes de abrir la autorización del sistema." : "Versión instalada: " + root.current-version + ". La comprobación consulta únicamente los releases oficiales de GitHub.";
+                    color: Palette.muted; font-size: 13px; wrap: word-wrap;
+                }
+                Rectangle {
+                    height: 60px; border-radius: 12px; background: Palette.elevated;
+                    if root.update-checking: ProgressIndicator { indeterminate: true; width: 180px; height: 3px; x: (parent.width - self.width) / 2; y: 12px; }
+                    Text { text: root.update-busy || root.update-checking || !root.update-available ? root.update-status : "Al terminar, Nitum se reiniciará y volverá a abrir este documento."; color: Palette.text; font-size: 12px; wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                Rectangle { vertical-stretch: 1; }
+                HorizontalLayout {
+                    alignment: end; spacing: 10px;
+                    Button { text: root.update-available ? "Ahora no" : "Cerrar"; enabled: !root.update-busy && !root.update-checking; clicked => { root.close-dialog(); } }
+                    PrimaryButton { visible: root.update-available; label: root.update-busy ? "Actualizando…" : "Actualizar y reiniciar"; enabled: !root.update-busy && !root.update-checking; clicked => { root.install-update(); } }
+                }
+            }
+            if root.active-dialog == 5: VerticalLayout {
+                padding: 28px; spacing: 18px;
+                HorizontalLayout {
+                    Button { text: "Atrás"; clicked => { root.active-dialog = 1; } }
+                    Rectangle { horizontal-stretch: 1; }
+                    Text { text: "Comprobar firmas"; color: Palette.text; font-size: 20px; font-weight: 700; vertical-alignment: center; }
+                    Rectangle { horizontal-stretch: 1; }
+                    IconButton { icon: "×"; hint: "Cerrar"; clicked => { root.close-dialog(); } }
+                }
+                Text { text: "Revisamos el PDF localmente y separamos integridad, cobertura y confianza para no dar una falsa sensación de seguridad."; color: Palette.muted; font-size: 13px; wrap: word-wrap; }
+                Rectangle {
+                    vertical-stretch: 1; border-radius: 16px;
+                    background: root.verification-busy ? Palette.elevated : root.verification-success ? #16a66a18 : #d92d2018;
+                    VerticalLayout {
+                        padding: 22px; spacing: 12px; alignment: center;
+                        if root.verification-busy: ProgressIndicator { indeterminate: true; width: 180px; height: 3px; }
+                        Text { text: root.verification-status; color: root.verification-success ? Palette.success : root.verification-busy ? Palette.text : #d92d20; font-size: 14px; wrap: word-wrap; horizontal-alignment: center; }
+                    }
+                }
+                Button { text: "Cerrar"; clicked => { root.close-dialog(); } }
+            }
+            if root.active-dialog == 6: VerticalLayout {
+                padding: 28px; spacing: 16px;
+                HorizontalLayout {
+                    Button { text: "Atrás"; clicked => { root.active-dialog = 1; } }
+                    Rectangle { horizontal-stretch: 1; }
+                    Text { text: "Tarjetas y tokens"; color: Palette.text; font-size: 21px; font-weight: 700; }
+                    Rectangle { horizontal-stretch: 1; }
+                    IconButton { icon: "×"; hint: "Cerrar"; clicked => { root.close-dialog(); } }
+                }
+                Text { text: root.token-status; color: Palette.muted; font-size: 13px; wrap: word-wrap; }
+                VerticalLayout {
+                    spacing: 10px;
+                    for option[index] in root.token-options: Button {
+                        text: option;
+                        clicked => { root.choose-token(index); }
+                    }
+                }
+                Rectangle { vertical-stretch: 1; }
+                Button { text: "Elegir módulo PKCS#11 manualmente"; clicked => { root.select-token-module(); } }
+            }
+            if root.active-dialog == 7: VerticalLayout {
+                padding: 28px; spacing: 16px;
+                HorizontalLayout {
+                    Button { text: "Atrás"; clicked => { root.active-dialog = root.appearance-return-dialog; } }
+                    Rectangle { horizontal-stretch: 1; }
+                    Text { text: "Firmas visuales guardadas"; color: Palette.text; font-size: 20px; font-weight: 700; }
+                    Rectangle { horizontal-stretch: 1; }
+                    IconButton { icon: "×"; hint: "Cerrar"; clicked => { root.close-dialog(); } }
+                }
+                Text {
+                    text: "Elige una apariencia reutilizable. La validez siempre proviene de tu certificado, no de la imagen.";
+                    color: Palette.muted; font-size: 13px; wrap: word-wrap;
+                }
+                if root.appearance-options.length == 0: Rectangle {
+                    vertical-stretch: 1; border-radius: 16px; background: Palette.elevated;
+                    Text { text: "Todavía no tienes firmas visuales guardadas."; color: Palette.muted; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                if root.appearance-options.length > 0: ScrollView {
+                    vertical-stretch: 1;
+                    VerticalLayout {
+                        width: parent.width; spacing: 10px;
+                        for option[index] in root.appearance-options: Button {
+                            height: 56px; vertical-stretch: 0; text: option;
+                            clicked => { root.choose-appearance(index); }
+                        }
+                    }
+                }
+                PrimaryButton { label: "Añadir imagen"; clicked => { root.select-appearance(); } }
+                Button { text: "Cancelar"; clicked => { root.close-dialog(); } }
+            }
+            if root.active-dialog == 8: VerticalLayout {
+                padding: 28px; spacing: 16px;
+                HorizontalLayout {
+                    Button { text: "Atrás"; clicked => { root.active-dialog = 2; } }
+                    Rectangle { horizontal-stretch: 1; }
+                    Text { text: "Identidades digitales"; color: Palette.text; font-size: 20px; font-weight: 700; }
+                    Rectangle { horizontal-stretch: 1; }
+                    IconButton { icon: "×"; hint: "Cerrar"; clicked => { root.close-dialog(); } }
+                }
+                Text {
+                    text: "Elige una identidad .p12 o .pfx guardada. La contraseña se solicitará después y nunca se almacenará.";
+                    color: Palette.muted; font-size: 13px; wrap: word-wrap;
+                }
+                if root.identity-options.length == 0: Rectangle {
+                    vertical-stretch: 1; border-radius: 16px; background: Palette.elevated;
+                    Text { text: "Todavía no tienes identidades guardadas."; color: Palette.muted; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                if root.identity-options.length > 0: ScrollView {
+                    vertical-stretch: 1;
+                    VerticalLayout {
+                        width: parent.width; spacing: 10px;
+                        for option[index] in root.identity-options: Button {
+                            height: 56px; vertical-stretch: 0; text: option;
+                            clicked => { root.choose-identity(index); }
+                        }
+                    }
+                }
+                PrimaryButton { label: "Importar .p12 o .pfx"; clicked => { root.select-identity(); } }
+                Button { text: "Cancelar"; clicked => { root.close-dialog(); } }
+            }
+        }
+    }
+}

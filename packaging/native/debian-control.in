@@ -1,0 +1,9 @@
+Package: nitum-pdf
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: @DEB_ARCH@
+Maintainer: Nitum <dev-jackson@users.noreply.github.com>
+Depends: libc6, libfontconfig1, libxkbcommon0
+Description: Visor y firma digital PDF nativos
+ Nitum PDF permite leer, buscar, firmar y comprobar documentos localmente.
