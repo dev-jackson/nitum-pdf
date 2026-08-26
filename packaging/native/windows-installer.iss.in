@@ -16,7 +16,7 @@ WizardStyle=modern
 SetupIconFile=@ICON_FILE@
 ChangesAssociations=yes
 CloseApplications=yes
-RestartApplications=no
+RestartApplications=yes
 
 [Files]
 Source: "@BINARY_DIR@\nitum-pdf.exe"; DestDir: "{app}"; Flags: ignoreversion

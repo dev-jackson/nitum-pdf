@@ -240,7 +240,12 @@ impl UpdateInstaller for NativeUpdateInstaller {
                     .args(["/passive", "/norestart"])
                     .status()?,
                 Some("exe") => Command::new(package)
-                    .args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
+                    .args([
+                        "/VERYSILENT",
+                        "/SUPPRESSMSGBOXES",
+                        "/NORESTART",
+                        "/RESTARTAPPLICATIONS",
+                    ])
                     .status()?,
                 _ => bail!("Windows esperaba un instalador .msi o .exe."),
             }
@@ -272,14 +277,30 @@ impl UpdateInstaller for NativeUpdateInstaller {
     }
 
     fn relaunch(&self, document: Option<&Path>) -> Result<()> {
+        // Inno Setup must close the running executable before replacing it on
+        // Windows. Its Restart Manager preserves the original command line,
+        // including the open document, and relaunches the installed binary.
+        // This process normally no longer exists when installation completes;
+        // if it does, launching here would create a duplicate window.
+        #[cfg(target_os = "windows")]
+        {
+            let _ = document;
+            return Ok(());
+        }
+
+        #[cfg(not(target_os = "windows"))]
         let executable = std::env::current_exe()?;
+        #[cfg(not(target_os = "windows"))]
         let mut command = Command::new(executable);
+        #[cfg(not(target_os = "windows"))]
         if let Some(document) = document {
             command.arg(document);
         }
+        #[cfg(not(target_os = "windows"))]
         command
             .spawn()
             .context("No se pudo volver a abrir Nitum PDF")?;
+        #[cfg(not(target_os = "windows"))]
         Ok(())
     }
 }

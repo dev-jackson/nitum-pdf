@@ -29,7 +29,20 @@ impl Pkcs11Signer {
         let context =
             Pkcs11::new(&token.module_path).context("no se pudo cargar el módulo de la tarjeta")?;
         context.initialize(CInitializeArgs::new(CInitializeFlags::OS_LOCKING_OK))?;
-        let slot = Slot::try_from(token.slot_id).context("el lector seleccionado ya no existe")?;
+        // Slot identifiers are not stable across PKCS#11 initializations or a
+        // physical token reconnect. Resolve the selected token again by its
+        // stable identity before falling back to the discovery-time slot id.
+        let slot = context
+            .get_slots_with_token()?
+            .into_iter()
+            .find(|slot| {
+                context.get_token_info(*slot).is_ok_and(|info| {
+                    info.serial_number().trim() == token.serial
+                        && info.label().trim() == token.label
+                })
+            })
+            .or_else(|| Slot::try_from(token.slot_id).ok())
+            .context("el lector seleccionado ya no existe")?;
         let session = context.open_ro_session(slot)?;
         let pin = AuthPin::new(pin.to_owned().into());
         session
