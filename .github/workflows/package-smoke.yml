@@ -1,0 +1,64 @@
+name: Native package smoke tests
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/package-smoke.yml"
+      - "native/**"
+      - "packaging/native/**"
+      - "data/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libxkbcommon-dev libssl-dev
+      - run: rustup update stable && rustup default stable
+      - name: Build and inspect Debian package
+        run: |
+          packaging/native/build-linux-deb.sh 0.0.0
+          package=$(find dist -maxdepth 1 -name '*.deb' -print -quit)
+          test -n "$package"
+          dpkg-deb --info "$package"
+          dpkg-deb --contents "$package" | tee "$RUNNER_TEMP/deb-contents.txt"
+          grep -q './usr/lib/nitum-pdf/nitum-pdf' "$RUNNER_TEMP/deb-contents.txt"
+          grep -q './usr/lib/nitum-pdf/libpdfium.so' "$RUNNER_TEMP/deb-contents.txt"
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup update stable && rustup default stable
+      - name: Build and inspect macOS package
+        run: |
+          packaging/native/build-macos-pkg.sh 0.0.0
+          package=$(find dist -maxdepth 1 -name '*.pkg' -print -quit)
+          test -n "$package"
+          payload=$(pkgutil --payload-files "$package")
+          printf '%s\n' "$payload"
+          printf '%s\n' "$payload" | grep -q 'Applications/Nitum PDF.app/Contents/MacOS/nitum-pdf'
+          printf '%s\n' "$payload" | grep -q 'Applications/Nitum PDF.app/Contents/Resources/libpdfium.dylib'
+          if printf '%s\n' "$payload" | grep -E '(^|/)\._|\.py([co])?$|pyproject\.toml|requirements.*\.txt'; then
+            echo 'The package contains forbidden metadata or Python files.' >&2
+            exit 1
+          fi
+
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup update stable; rustup default stable
+      - run: choco install innosetup --no-progress -y
+      - name: Build and inspect Windows installer
+        shell: pwsh
+        run: |
+          packaging/native/build-windows.ps1 -Version 0.0.0
+          $installer = Get-ChildItem dist\nitum-pdf-0.0.0-windows-x86_64.exe | Select-Object -First 1
+          if ($null -eq $installer -or $installer.Length -lt 1MB) {
+            throw "The native Windows installer was not produced correctly."
+          }

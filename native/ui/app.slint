@@ -332,7 +332,7 @@ export component AppWindow inherits Window {
                 HeaderButton { label: root.search-open ? "Cerrar" : "Buscar"; hint: "Buscar en el documento"; clicked => { root.search-open = !root.search-open; root.search-status = ""; } }
                 HeaderButton { label: root.compact-header ? "Tema" : (Palette.dark ? "Claro" : "Oscuro"); hint: "Cambiar apariencia"; clicked => { Palette.dark = !Palette.dark; } }
                 HeaderButton { label: root.compact-header ? (root.update-available ? "Nueva" : "Info") : (root.update-available ? "Actualizar" : "Versión"); hint: root.update-available ? "Hay una versión nueva" : "Buscar actualizaciones"; clicked => { root.check-updates(); } }
-                PrimaryButton { label: root.compact-header ? "Firmar" : "Firmar este PDF"; enabled: root.document-open; clicked => { root.show-signature-center(); } }
+                PrimaryButton { width: root.compact-header ? 104px : 144px; label: root.compact-header ? "Firmar" : "Firmar este PDF"; enabled: root.document-open; clicked => { root.show-signature-center(); } }
             }
         }
 
@@ -540,6 +540,7 @@ export component AppWindow inherits Window {
                 IntentCard { icon: "USB"; title: "Conectar tarjeta o DNI"; detail: "OpenSC, p11-kit y dispositivos PKCS#11"; action: "Buscar"; selected => { root.discover-tokens(); } }
             }
             if root.active-dialog == 2: signing-scroll := ScrollView {
+              height: parent.height - 58px;
               viewport-width: self.width;
               VerticalLayout {
                 width: parent.width;
@@ -648,9 +649,18 @@ export component AppWindow inherits Window {
                     background: root.signing-success ? #16a66a18 : #d92d2018;
                     Text { text: root.signing-status; color: root.signing-success ? Palette.success : #d92d20; wrap: word-wrap; vertical-alignment: center; horizontal-alignment: center; }
                 }
-                Rectangle { vertical-stretch: 1; }
-                Button { text: "Cancelar"; clicked => { root.placement-mode = false; root.close-dialog(); } }
+                Rectangle { height: 8px; }
               }
+            }
+            if root.active-dialog == 2: Rectangle {
+                y: parent.height - 58px; width: parent.width; height: 58px;
+                background: Palette.surface;
+                Rectangle { height: 1px; background: Palette.line; }
+                Button {
+                    x: 24px; y: 10px; width: parent.width - 48px;
+                    text: "Cancelar";
+                    clicked => { root.placement-mode = false; root.close-dialog(); }
+                }
             }
             if root.active-dialog == 3: VerticalLayout {
                 padding: 28px; spacing: 16px;
