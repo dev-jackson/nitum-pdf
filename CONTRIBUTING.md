@@ -12,19 +12,29 @@
 
 ```bash
 git switch develop
-git switch -c release/0.3.0
-# actualizar la versión en pyproject.toml y src/pwviewpdf/__init__.py
-python -m pytest
+git switch -c release/<versión>
+# actualizar la versión en native/Cargo.toml y regenerar native/Cargo.lock
+cd native
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-targets --locked
+cd ..
 git switch main
 git merge --no-ff release/0.3.0
-git tag -s v0.3.0 -m "Nitum PDF 0.3.0"
+git tag -s v<versión> -m "Nitum PDF <versión>"
 git switch develop
 git merge --no-ff release/0.3.0
-git push origin main develop v0.3.0
+git push origin main develop v<versión>
 ```
 
-La etiqueta debe estar firmada. GitHub Actions genera el paquete y el checksum;
-no se deben adjuntar binarios construidos manualmente a un release oficial.
+La etiqueta debe estar firmada. GitHub Actions genera paquetes, checksums y
+attestations Sigstore verificables con `gh attestation verify`; no se deben
+adjuntar binarios construidos manualmente a un release oficial. Cuando estén
+configuradas las credenciales de plataforma, macOS se firma y notariza y Windows
+aplica Authenticode antes de publicar.
+
+El repositorio y los artefactos son íntegramente Rust/Slint: no se acepta añadir
+Python, entornos virtuales ni pasos `pip` a la aplicación, las pruebas o CI.
 
 ### Hotfix
 
