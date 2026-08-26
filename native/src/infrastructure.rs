@@ -92,6 +92,12 @@ impl HardwareTokenProvider for NativeHardwareTokenProvider {
         let mut tokens = Vec::new();
         for slot in context.get_slots_with_token()? {
             let info = context.get_token_info(slot)?;
+            // Some modules (notably SoftHSM) report an empty provisioning slot
+            // as token-present. It cannot open a user session and must never be
+            // offered as a signing identity.
+            if !info.token_initialized() {
+                continue;
+            }
             tokens.push(HardwareToken {
                 label: info.label().trim().to_owned(),
                 serial: info.serial_number().trim().to_owned(),

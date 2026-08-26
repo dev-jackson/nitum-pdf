@@ -37,7 +37,8 @@ impl Pkcs11Signer {
             .into_iter()
             .find(|slot| {
                 context.get_token_info(*slot).is_ok_and(|info| {
-                    info.serial_number().trim() == token.serial
+                    info.token_initialized()
+                        && info.serial_number().trim() == token.serial
                         && info.label().trim() == token.label
                 })
             })

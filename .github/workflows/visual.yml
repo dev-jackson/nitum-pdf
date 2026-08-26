@@ -3,6 +3,10 @@ name: Visual review
 on:
   pull_request:
 
+concurrency:
+  group: visual-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   screenshots:
     runs-on: ubuntu-24.04

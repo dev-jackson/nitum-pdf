@@ -13,8 +13,8 @@ GTK no forma parte del árbol, los artefactos ni las pruebas.
    no se incluyen en la aplicación, ni siquiera como respaldo opcional.
 4. **Migración:** se reutilizan identidades, firmas visuales, confianza y
    preferencias existentes; nunca se copian contraseñas.
-5. **Plataformas:** Linux es el primer destino verificable; Windows y macOS se
-   habilitan cuando firma, almacenamiento seguro y empaquetado tienen paridad.
+5. **Plataformas:** Linux, Windows y macOS comparten el mismo núcleo; CI compila
+   los tres destinos y construye sus instaladores antes de aceptar el cambio.
 
 No existe respaldo opcional en Python. La paridad se protege con pruebas Rust de
 dominio, adaptadores reales, firmas, PDF cifrado y capturas visuales headless.
