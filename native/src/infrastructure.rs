@@ -99,7 +99,7 @@ impl HardwareTokenProvider for NativeHardwareTokenProvider {
                 slot_id: slot.id(),
             });
         }
-        tokens.sort_by(|left, right| left.label.to_lowercase().cmp(&right.label.to_lowercase()));
+        tokens.sort_by_key(|token| token.label.to_lowercase());
         Ok(tokens)
     }
 }
@@ -214,8 +214,7 @@ impl AppearanceStore for NativeAppearanceStore {
             })
             .map(Self::appearance)
             .collect::<Vec<_>>();
-        appearances
-            .sort_by(|left, right| left.label.to_lowercase().cmp(&right.label.to_lowercase()));
+        appearances.sort_by_key(|appearance| appearance.label.to_lowercase());
         Ok(appearances)
     }
 }
@@ -317,8 +316,7 @@ impl IdentityStore for NativeIdentityStore {
             })
             .map(Self::identity)
             .collect::<Vec<_>>();
-        identities
-            .sort_by(|left, right| left.label.to_lowercase().cmp(&right.label.to_lowercase()));
+        identities.sort_by_key(|identity| identity.label.to_lowercase());
         Ok(identities)
     }
 }

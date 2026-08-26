@@ -7,7 +7,9 @@ use std::rc::Rc;
 
 fn luminance(pixels: &[u8]) -> f64 {
     pixels
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|pixel| {
             0.2126 * f64::from(pixel[0])
                 + 0.7152 * f64::from(pixel[1])
@@ -64,7 +66,13 @@ fn light_dark_and_signature_center_render_headlessly() {
     save_if_requested("signature-center-dark.png", &signature_center);
 
     let mut pixels = SharedPixelBuffer::<Rgba8Pixel>::new(600, 800);
-    for (index, pixel) in pixels.make_mut_bytes().chunks_exact_mut(4).enumerate() {
+    for (index, pixel) in pixels
+        .make_mut_bytes()
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .enumerate()
+    {
         let y = index / 600;
         let line = y > 90 && y % 42 < 3;
         pixel.copy_from_slice(if line {
