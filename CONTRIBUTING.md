@@ -37,6 +37,9 @@ en Windows.
 
 Configura estos secretos del repositorio con `gh secret set <NOMBRE>` antes de
 crear la etiqueta. Nunca guardes certificados ni contraseñas en el árbol Git.
+Para cargarlos de forma guiada, sin imprimir valores ni crear copias temporales,
+ejecuta `packaging/native/configure-release-secrets.sh`. El script valida ambos
+PKCS#12 antes de solicitar confirmación y modificar GitHub.
 
 | Secreto | Contenido |
 |---|---|
