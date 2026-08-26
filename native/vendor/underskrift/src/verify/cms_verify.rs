@@ -676,11 +676,9 @@ pub fn verify_timestamp_token(
 
     // Step 6: Verify TSA certificate chain against TSA trust store
     let tsa_chain_trusted = if let Some(ref cert) = tsa_signer_cert {
-        let chain = super::chain_verify::build_chain(cert, &tsa_certs)
-            .unwrap_or_else(|_| vec![cert.clone()]);
         // Use current time for TSA cert validity (TSA cert must be valid now)
         let now = chrono_to_der_datetime(&chrono::Utc::now());
-        match tsa_trust_store.verify_chain(&chain, now) {
+        match super::chain_verify::find_trusted_chain(cert, &tsa_certs, tsa_trust_store, now) {
             Ok(_) => true,
             Err(e) => {
                 issues.push(format!("TSA certificate chain verification failed: {e}"));
@@ -858,10 +856,8 @@ pub fn verify_doc_timestamp(
 
     // Step 6: Verify TSA certificate chain against TSA trust store
     let tsa_chain_trusted = if let Some(ref cert) = tsa_signer_cert {
-        let chain = super::chain_verify::build_chain(cert, &tsa_certs)
-            .unwrap_or_else(|_| vec![cert.clone()]);
         let now = chrono_to_der_datetime(&chrono::Utc::now());
-        match tsa_trust_store.verify_chain(&chain, now) {
+        match super::chain_verify::find_trusted_chain(cert, &tsa_certs, tsa_trust_store, now) {
             Ok(_) => true,
             Err(e) => {
                 issues.push(format!(

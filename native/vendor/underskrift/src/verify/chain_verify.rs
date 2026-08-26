@@ -80,35 +80,25 @@ pub fn verify_chain(
 ) -> ChainVerifyResult {
     let mut issues = Vec::new();
 
-    // Build the certificate chain from signer cert to root
-    let chain = match build_chain(signer_cert, embedded_certs) {
+    // Build and select the shortest embedded path that reaches a trust anchor.
+    // CMS containers may include historical cross-certificates after an already
+    // trusted intermediate; blindly following the longest route can therefore
+    // reject an otherwise valid modern path.
+    let now = current_der_datetime();
+    let chain = match find_trusted_chain(signer_cert, embedded_certs, trust_store, now) {
         Ok(chain) => chain,
         Err(e) => {
-            issues.push(format!("chain building failed: {e}"));
+            issues.push(format!("chain verification failed: {e}"));
             return ChainVerifyResult {
                 trusted: false,
                 chain: vec![signer_cert.clone()],
                 trust_anchor_subject: None,
-                cert_validity: CertValidity::ChainIncomplete,
+                cert_validity: trust_error_validity(&e),
                 issues,
             };
         }
     };
 
-    // Verify the chain against the trust store
-    // Use the current system time for validation
-    let now = {
-        let utc = chrono::Utc::now();
-        der::DateTime::new(
-            utc.format("%Y").to_string().parse().unwrap_or(2026),
-            utc.format("%m").to_string().parse().unwrap_or(1),
-            utc.format("%d").to_string().parse().unwrap_or(1),
-            utc.format("%H").to_string().parse().unwrap_or(0),
-            utc.format("%M").to_string().parse().unwrap_or(0),
-            utc.format("%S").to_string().parse().unwrap_or(0),
-        )
-        .ok()
-    };
     match trust_store.verify_chain(&chain, now) {
         Ok(anchor) => {
             let anchor_subject = format!("{}", anchor.tbs_certificate.subject);
@@ -121,13 +111,7 @@ pub fn verify_chain(
             }
         }
         Err(e) => {
-            let cert_validity = match &e {
-                crate::error::TrustError::Expired { .. } => CertValidity::Expired,
-                crate::error::TrustError::NotYetValid { .. } => CertValidity::NotYetValid,
-                crate::error::TrustError::UntrustedRoot { .. } => CertValidity::UntrustedRoot,
-                crate::error::TrustError::ChainBroken { .. } => CertValidity::ChainIncomplete,
-                other => CertValidity::ValidationError(format!("{other}")),
-            };
+            let cert_validity = trust_error_validity(&e);
             issues.push(format!("chain verification failed: {e}"));
             ChainVerifyResult {
                 trusted: false,
@@ -232,8 +216,11 @@ pub async fn validate_certificate_path(
     let mut issues = Vec::new();
     let mut per_cert_status = Vec::new();
 
-    // Step 1: Build the certificate chain
-    let chain = match build_chain(signer_cert, embedded_certs) {
+    let validation_instant = validation_time.unwrap_or_else(chrono::Utc::now);
+    let check_time = chrono_to_der_datetime(&validation_instant);
+
+    // Step 1: Build and select a path that terminates at a trust anchor.
+    let chain = match find_trusted_chain(signer_cert, embedded_certs, trust_store, check_time) {
         Ok(chain) => chain,
         Err(e) => {
             issues.push(format!("chain building failed: {e}"));
@@ -259,19 +246,6 @@ pub async fn validate_certificate_path(
 
     // Step 2: Verify the chain against the trust store (signatures + time)
     // Use the provided validation_time (e.g. from a verified timestamp) or fall back to now.
-    let check_time = {
-        let utc = validation_time.unwrap_or_else(chrono::Utc::now);
-        der::DateTime::new(
-            utc.format("%Y").to_string().parse().unwrap_or(2026),
-            utc.format("%m").to_string().parse().unwrap_or(1),
-            utc.format("%d").to_string().parse().unwrap_or(1),
-            utc.format("%H").to_string().parse().unwrap_or(0),
-            utc.format("%M").to_string().parse().unwrap_or(0),
-            utc.format("%S").to_string().parse().unwrap_or(0),
-        )
-        .ok()
-    };
-
     let (chain_valid, trust_anchor_subject, anchor_cert) =
         match trust_store.verify_chain(&chain, check_time) {
             Ok(anchor) => {
@@ -531,6 +505,58 @@ pub(crate) fn build_chain(
         Err("empty chain".to_string())
     } else {
         Ok(chain)
+    }
+}
+
+/// Choose the shortest embedded certificate path accepted by the trust store.
+///
+/// A timestamp token can contain both a current chain and a longer historical
+/// cross-signing route. Trying every prefix lets the trust store terminate the
+/// path at its own modern anchor instead of forcing the historical tail.
+pub(crate) fn find_trusted_chain(
+    signer_cert: &Certificate,
+    embedded_certs: &[Certificate],
+    trust_store: &TrustStore,
+    validation_time: Option<der::DateTime>,
+) -> Result<Vec<Certificate>, crate::error::TrustError> {
+    let chain =
+        build_chain(signer_cert, embedded_certs).unwrap_or_else(|_| vec![signer_cert.clone()]);
+    let mut last_error = None;
+
+    for length in 1..=chain.len() {
+        let candidate = &chain[..length];
+        match trust_store.verify_chain(candidate, validation_time) {
+            Ok(_) => return Ok(candidate.to_vec()),
+            Err(error) => last_error = Some(error),
+        }
+    }
+
+    Err(last_error.expect("a non-empty certificate path was checked"))
+}
+
+fn current_der_datetime() -> Option<der::DateTime> {
+    chrono_to_der_datetime(&chrono::Utc::now())
+}
+
+fn chrono_to_der_datetime(value: &chrono::DateTime<chrono::Utc>) -> Option<der::DateTime> {
+    der::DateTime::new(
+        value.format("%Y").to_string().parse().unwrap_or(2026),
+        value.format("%m").to_string().parse().unwrap_or(1),
+        value.format("%d").to_string().parse().unwrap_or(1),
+        value.format("%H").to_string().parse().unwrap_or(0),
+        value.format("%M").to_string().parse().unwrap_or(0),
+        value.format("%S").to_string().parse().unwrap_or(0),
+    )
+    .ok()
+}
+
+fn trust_error_validity(error: &crate::error::TrustError) -> CertValidity {
+    match error {
+        crate::error::TrustError::Expired { .. } => CertValidity::Expired,
+        crate::error::TrustError::NotYetValid { .. } => CertValidity::NotYetValid,
+        crate::error::TrustError::UntrustedRoot { .. } => CertValidity::UntrustedRoot,
+        crate::error::TrustError::ChainBroken { .. } => CertValidity::ChainIncomplete,
+        other => CertValidity::ValidationError(format!("{other}")),
     }
 }
 
