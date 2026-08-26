@@ -237,21 +237,36 @@ def entry_row(title: str):
     return row, entry.get_text
 
 
-def password_row(title: str, on_activate=None):
+def password_row(title: str, on_activate=None, initial_text: str = ""):
     """Returns (row, getter, set_title)."""
     if HAS_PASSWORD_ROW:
         row = Adw.PasswordEntryRow(title=title)
+        row.set_text(initial_text)
         if on_activate is not None:
             row.connect("entry-activated", lambda *_: on_activate())
         return row, row.get_text, row.set_title
     entry = Gtk.PasswordEntry(show_peek_icon=True, valign=Gtk.Align.CENTER,
                               hexpand=True)
+    entry.set_text(initial_text)
     if on_activate is not None:
         entry.connect("activate", lambda *_: on_activate())
     row = Adw.ActionRow(title=title)
     row.add_suffix(entry)
     row.set_activatable_widget(entry)
     return row, entry.get_text, row.set_title
+
+
+def set_entry_text(row: Gtk.Widget, text: str) -> None:
+    """Set text on native and fallback entry rows without leaking implementation."""
+    if hasattr(row, "set_text"):
+        row.set_text(text)
+        return
+    child = row.get_first_child()
+    while child is not None:
+        if hasattr(child, "set_text"):
+            child.set_text(text)
+            return
+        child = child.get_next_sibling()
 
 
 def open_file(parent: Gtk.Window, title: str, callback, patterns=("*.pdf",),

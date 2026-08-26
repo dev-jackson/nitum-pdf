@@ -66,3 +66,14 @@ def test_download_rejects_bad_checksum(tmp_path, monkeypatch):
         updater.download_and_verify(release, opener_for({
             release.package_url: b"bad", release.checksum_url: b"0" * 64,
         }))
+
+
+def test_installer_returns_process_so_ui_can_wait_and_restart(tmp_path, monkeypatch):
+    package = tmp_path / "nitum.deb"
+    package.write_bytes(b"deb")
+    process = object()
+    calls = []
+    monkeypatch.setattr(updater.subprocess, "Popen",
+                        lambda command: calls.append(command) or process)
+    assert updater.install_deb(package) is process
+    assert calls[0][:4] == ["pkexec", "apt-get", "install", "-y"]

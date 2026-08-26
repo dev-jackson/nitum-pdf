@@ -1,4 +1,5 @@
 import subprocess
+import datetime
 from types import SimpleNamespace
 
 from pwviewpdf import identities
@@ -74,3 +75,27 @@ def test_import_copies_and_locks_down_the_file(tmp_path):
     stored = identities.import_pkcs12(source, target_dir)
     assert stored.read_bytes() == b"pretend-pkcs12"
     assert oct(stored.stat().st_mode)[-3:] == "600"
+
+
+def test_real_pkcs12_is_inspected_before_import(identity):
+    details = identities.inspect_pkcs12(identity["p12"], identity["password"].decode())
+    assert details.label == "Ada Lovelace"
+    assert details.expires > datetime.datetime.now(datetime.timezone.utc)
+
+
+def test_wrong_pkcs12_password_is_actionable(identity):
+    try:
+        identities.inspect_pkcs12(identity["p12"], "incorrecta")
+    except ValueError as exc:
+        assert ".p12/.pfx" in str(exc) and "contraseña" in str(exc)
+    else:
+        raise AssertionError("una contraseña incorrecta no puede aceptarse")
+
+
+def test_local_identity_is_acrobat_compatible(tmp_path):
+    path = identities.create_local("Ada Local", "ada@example.test",
+                                   "password-segura", tmp_path)
+    assert path.suffix == ".p12"
+    details = identities.inspect_pkcs12(path, "password-segura")
+    assert details.label == "Ada Local"
+    assert oct(path.stat().st_mode)[-3:] == "600"
