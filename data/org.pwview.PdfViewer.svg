@@ -1,7 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1769ff"/><stop offset="1" stop-color="#0044d8"/></linearGradient></defs>
-  <rect x="8" y="8" width="112" height="112" rx="25" fill="#061b45"/>
-  <path d="M29 94V35c0-8 9-12 15-7l55 45v21L49 53v41z" fill="url(#b)"/>
-  <path d="M79 58V34c0-5 4-9 9-9h11v48z" fill="#0b357d"/>
-  <path d="M29 35c0-8 9-12 15-7l55 45v21L49 53c-8-7-20-1-20 9z" fill="url(#b)"/>
+  <defs>
+    <linearGradient id="brand" x1="18" y1="14" x2="110" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/><stop offset="1" stop-color="#1746B5"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#0B1F50" flood-opacity=".28"/>
+    </filter>
+  </defs>
+  <rect x="7" y="7" width="114" height="114" rx="27" fill="url(#brand)"/>
+  <path d="M34 22h43l19 19v58c0 5-4 9-9 9H34c-5 0-9-4-9-9V31c0-5 4-9 9-9z"
+        fill="#FFF" filter="url(#shadow)"/>
+  <path d="M77 22v14c0 4 3 7 7 7h12z" fill="#DCE7FF"/>
+  <path d="M38 77c8-13 12-17 15-16 4 2-3 17 2 18 5 1 10-17 15-15 4 2-3 15 2 17 4 2 10-7 16-7"
+        fill="none" stroke="#2563EB" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M39 91h37" stroke="#B7C7E8" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="96" cy="96" r="20" fill="#16A66A" stroke="#FFF" stroke-width="4"/>
+  <path d="m87 96 6 6 12-14" fill="none" stroke="#FFF" stroke-width="5"
+        stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

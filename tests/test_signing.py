@@ -119,6 +119,35 @@ def test_wrong_password_is_reported_clearly(sample_pdf, identity):
     assert "contraseña" in str(excinfo.value).lower() or "mac" in str(excinfo.value).lower()
 
 
+def test_identity_imported_through_onboarding_can_sign(
+        sample_pdf, identity, tmp_path):
+    from pwviewpdf import identities
+
+    password = identity["password"].decode()
+    details = identities.inspect_pkcs12(identity["p12"], password)
+    stored = identities.import_pkcs12(identity["p12"], tmp_path, details.label)
+    target = tmp_path / "firmado.pdf"
+    result = signing.sign_with_pkcs12(
+        sample_pdf, target, stored, password.encode(), OFFLINE,
+    )
+    assert result.output == target
+    assert result.statuses[0].intact is True
+
+
+def test_identity_created_in_nitum_can_sign(sample_pdf, tmp_path):
+    from pwviewpdf import identities
+
+    stored = identities.create_local(
+        "Ada Local", "ada@example.test", "password-segura", tmp_path,
+    )
+    target = tmp_path / "local-firmado.pdf"
+    result = signing.sign_with_pkcs12(
+        sample_pdf, target, stored, b"password-segura", OFFLINE,
+    )
+    assert result.output.exists()
+    assert result.statuses[0].common_name == "Ada Local"
+
+
 def test_visible_signature_is_actually_drawn(sample_pdf, identity):
     # Regression: pdfium needs a form environment to paint widget annotations.
     geo = PageGeometry(0, 0, 595, 842)

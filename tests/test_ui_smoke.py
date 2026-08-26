@@ -5,13 +5,14 @@ import pytest
 gi = pytest.importorskip("gi")
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk  # noqa: E402
+from gi.repository import Adw, Gio, Gtk  # noqa: E402
 
 if not Gtk.init_check():
     pytest.skip("no display available", allow_module_level=True)
 
 from pwviewpdf.app import (  # noqa: E402
-    PwViewPdf, SignDialog, SignatureCenterDialog, StatusDialog, ViewerWindow,
+    CreateIdentityDialog, ImportIdentityDialog, PwViewPdf, SignDialog,
+    SignatureCenterDialog, StatusDialog, ViewerWindow,
 )
 from pwviewpdf.identities import Identity  # noqa: E402
 
@@ -130,6 +131,67 @@ def test_sign_dialog_lists_identities_and_labels_the_secret(app, text_pdf):
     dialog = SignDialog(window, people, "Aparecerá en la página 1")
     assert dialog.identity_row.get_selected() == 0
     assert "Contraseña" in dialog.secret_row.get_title()
+
+
+def test_changing_identity_clears_the_previous_secret(app, text_pdf):
+    window = ViewerWindow(app)
+    window.open_document(text_pdf)
+    people = [
+        Identity(kind="pkcs12", label="archivo", path="/tmp/a.p12"),
+        Identity(kind="pkcs11", label="tarjeta", path="/tmp/token.so"),
+    ]
+    dialog = SignDialog(window, people, initial_secret="secreto")
+    dialog.identity_row.set_selected(1)
+    assert dialog._secret_text() == ""
+    assert "PIN" in dialog.secret_row.get_title()
+
+
+def test_pkcs12_import_validates_password_and_resumes_signing(
+        app, text_pdf, identity, tmp_path, monkeypatch):
+    from pwviewpdf import identities
+
+    monkeypatch.setattr(identities, "IDENTITY_DIR", tmp_path)
+    window = ViewerWindow(app)
+    window.open_document(text_pdf)
+    received = []
+    dialog = ImportIdentityDialog(
+        window, identity["p12"], lambda selected, secret: received.append((selected, secret)),
+    )
+    dialog.secret_row.set_text(identity["password"].decode())
+    dialog._submit()
+    assert received[0][0].label == "Ada Lovelace"
+    assert received[0][1] == identity["password"].decode()
+    assert list(tmp_path.glob("*.p12"))
+
+
+def test_identity_setup_dialogs_construct_with_cancel_actions(app, identity):
+    window = ViewerWindow(app)
+    imported = ImportIdentityDialog(window, identity["p12"])
+    created = CreateIdentityDialog(window)
+    assert imported.cancel_button.get_label() == "Cancelar"
+    assert created.cancel_button.get_label() == "Cancelar"
+
+
+def test_theme_choice_is_persisted(app, tmp_path, monkeypatch):
+    from pwviewpdf import state
+
+    monkeypatch.setattr(state, "STATE_FILE", tmp_path / "state.json")
+    window = ViewerWindow(app)
+    window.set_theme("dark")
+    assert state.load()["theme"] == "dark"
+    window.set_theme("system", remember=False)
+
+
+def test_restart_after_update_reopens_current_document(
+        app, text_pdf, monkeypatch):
+    window = ViewerWindow(app)
+    window.open_document(text_pdf)
+    commands = []
+    monkeypatch.setattr(Gio.Subprocess, "new",
+                        lambda command, _flags: commands.append(command) or object())
+    monkeypatch.setattr(app, "quit", lambda: None)
+    assert window._restart_updated_app() is False
+    assert commands == [["nitum-pdf", str(text_pdf)]]
 
 
 def test_compat_layer_reports_what_the_system_has():

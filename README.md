@@ -20,6 +20,21 @@ confiables y sin complejidad innecesaria.
 - Comprobación automática diaria de nuevas versiones publicadas en GitHub.
 - Descarga del `.deb`, verificación SHA-256 y actualización mediante `apt`/polkit.
 
+### Identidades digitales compatibles
+
+- **Archivos de Acrobat `.p12` y `.pfx`:** Nitum pide la contraseña, comprueba
+  que exista una clave privada y muestra el nombre real del titular antes de firmar.
+- **Tarjetas, DNI y tokens PKCS#11:** aparecen automáticamente cuando Linux y
+  `p11-kit` reconocen el dispositivo; la firma solicita su PIN.
+- **Identidad local:** puede crearse dentro de Nitum para uso personal o interno
+  y se guarda como PKCS#12 protegido por contraseña, compatible con Acrobat.
+- **`.cer`, `.crt` y certificados `.pem`:** normalmente solo contienen la parte
+  pública. Sirven para comprobar firmas, pero no pueden firmar sin la clave privada.
+- **Windows Certificate Store:** es una integración exclusiva de Windows. En
+  Linux, el equivalente interoperable es exportar la identidad como `.pfx/.p12`.
+- **Identidades remotas:** dependen del servidor y proveedor concreto; no son un
+  formato de archivo que pueda importarse de manera genérica.
+
 ## Instalar
 
 Descarga el `.deb` más reciente desde
