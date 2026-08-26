@@ -19,7 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pwviewpdf import appearances, identities, signing  # noqa: E402
 from pwviewpdf.app import (  # noqa: E402
-    PwViewPdf, SignDialog, SignatureCenterDialog, StatusDialog, ViewerWindow,
+    CreateIdentityDialog, ImportIdentityDialog, PwViewPdf, SignDialog,
+    SignatureCenterDialog, StatusDialog, ViewerWindow,
 )
 
 FAKE_IDENTITIES = [
@@ -70,7 +71,8 @@ def main() -> int:
         appearances.SIGNATURE_IMAGE = appearance
     sample, out_dir = Path(args[0]), Path(args[1])
     scenes = args[2:] or [
-        "empty", "viewer", "signature-center", "placing", "sign", "status", "search", "dark",
+        "empty", "viewer", "signature-center", "identity-import", "identity-create",
+        "placing", "sign", "status", "search", "dark-signature-center", "dark-sign",
     ]
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -89,14 +91,18 @@ def main() -> int:
         if name == "narrow":
             window.set_default_size(640, 760)
             return
-        if name == "signature-center":
+        if name in ("signature-center", "dark-signature-center", "light-signature-center"):
             SignatureCenterDialog(window).present(window)
+        elif name == "identity-import":
+            ImportIdentityDialog(window, Path("/home/ada/mi-identidad.p12")).present(window)
+        elif name == "identity-create":
+            CreateIdentityDialog(window).present(window)
         elif name == "placing":
             window.start_signing()
             page = window._pages[0]
             page.rect = (60, 330, 250, 390)
             page.canvas.queue_draw()
-        elif name == "sign":
+        elif name in ("sign", "dark-sign", "light-sign"):
             window.start_signing()
             SignDialog(window, FAKE_IDENTITIES,
                        "Aparecerá en la página 1").present(window)
@@ -112,9 +118,11 @@ def main() -> int:
             app.quit()
             return False
         name = steps.pop(0)
-        if name == "dark":
-            Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK)
         window = ViewerWindow(app)
+        if name.startswith("dark-"):
+            window.set_theme("dark", remember=False)
+        elif name.startswith("light-"):
+            window.set_theme("light", remember=False)
         window.present()
         build_scene(name, window)
 
@@ -129,7 +137,7 @@ def main() -> int:
 
         # A forced color-scheme change causes a second style/layout pass in GTK.
         # Capture after that pass so the image represents the settled UI.
-        GLib.timeout_add(1600 if name == "dark" else 900, shoot)
+        GLib.timeout_add(1600 if name.startswith("dark-") else 900, shoot)
         return False
 
     def on_activate(_app):

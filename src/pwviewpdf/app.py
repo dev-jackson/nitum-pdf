@@ -220,6 +220,11 @@ class ViewerWindow(Adw.ApplicationWindow):
         menu.append(S.COPY_TEXT, "win.copy-text")
         menu.append(S.IMPORT_IDENTITY, "win.import-identity")
         menu.append(S.CHECK_UPDATES, "win.check-updates")
+        appearance = Gio.Menu()
+        appearance.append(S.THEME_SYSTEM, "win.theme-system")
+        appearance.append(S.THEME_LIGHT, "win.theme-light")
+        appearance.append(S.THEME_DARK, "win.theme-dark")
+        menu.append_submenu(S.APPEARANCE, appearance)
         self.menu_button = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu,
                                           tooltip_text=S.MORE_OPTIONS)
         header.pack_end(self.menu_button)
@@ -295,7 +300,9 @@ class ViewerWindow(Adw.ApplicationWindow):
     def _install_css(self) -> None:
         provider = Gtk.CssProvider()
         compat.load_css(provider, """
-        window { background: #f4f5f7; }
+        @define-color accent_color #2563eb;
+        @define-color accent_bg_color #2563eb;
+        window { background: @window_bg_color; }
         .app-header { background: alpha(@window_bg_color, .94); }
         .welcome-page > box { margin-bottom: 72px; }
         .page-shadow { background: #ffffff; border-radius: 2px;
@@ -340,6 +347,9 @@ class ViewerWindow(Adw.ApplicationWindow):
             ("import-identity", lambda *_: self.choose_identity_file(), []),
             ("copy-text", lambda *_: self.copy_page_text(), ["<Control>c"]),
             ("check-updates", lambda *_: self.check_for_updates(manual=True), []),
+            ("theme-system", lambda *_: self.set_theme("system"), []),
+            ("theme-light", lambda *_: self.set_theme("light"), []),
+            ("theme-dark", lambda *_: self.set_theme("dark"), []),
             ("zoom-in", lambda *_: self.zoom(1), ["<Control>plus", "<Control>equal"]),
             ("zoom-out", lambda *_: self.zoom(-1), ["<Control>minus"]),
             ("search", lambda *_: self.search_button.set_active(True),
@@ -351,6 +361,19 @@ class ViewerWindow(Adw.ApplicationWindow):
             self.add_action(action)
             if accels:
                 self.get_application().set_accels_for_action(f"win.{name}", accels)
+        self.set_theme(str(state.load().get("theme", "system")), remember=False)
+
+    def set_theme(self, theme: str, remember: bool = True) -> None:
+        schemes = {
+            "system": Adw.ColorScheme.DEFAULT,
+            "light": Adw.ColorScheme.FORCE_LIGHT,
+            "dark": Adw.ColorScheme.FORCE_DARK,
+        }
+        theme = theme if theme in schemes else "system"
+        Adw.StyleManager.get_default().set_color_scheme(schemes[theme])
+        if remember:
+            state.remember("theme", theme)
+            self.toast(S.THEME_CHANGED.format(theme=S.THEME_NAMES[theme]))
 
     def check_for_updates(self, manual: bool = False) -> None:
         if manual:
@@ -394,11 +417,37 @@ class ViewerWindow(Adw.ApplicationWindow):
         threading.Thread(target=work, daemon=True).start()
 
     def _install_update(self, package: Path) -> None:
-        self.toast(S.UPDATE_READY)
         try:
-            updater.install_deb(package)
+            process = updater.install_deb(package)
         except Exception as exc:
             self.toast(S.UPDATE_INSTALL_FAILED.format(reason=str(exc)))
+            return
+        self.toast(S.UPDATE_INSTALLING)
+
+        def wait_for_install() -> None:
+            code = process.wait()
+            GLib.idle_add(self._update_installed, code)
+
+        threading.Thread(target=wait_for_install, daemon=True).start()
+
+    def _update_installed(self, code: int) -> None:
+        if code != 0:
+            self.toast(S.UPDATE_INSTALL_FAILED.format(reason=f"apt terminó con código {code}"))
+            return
+        self.toast(S.UPDATE_RESTARTING)
+        GLib.timeout_add(700, self._restart_updated_app)
+
+    def _restart_updated_app(self) -> bool:
+        command = ["nitum-pdf"]
+        if self.path:
+            command.append(str(self.path))
+        try:
+            Gio.Subprocess.new(command, Gio.SubprocessFlags.NONE)
+        except Exception as exc:
+            self.toast(S.UPDATE_INSTALL_FAILED.format(reason=str(exc)))
+            return False
+        self.get_application().quit()
+        return False
 
     def _install_drop_target(self) -> None:
         target = Gtk.DropTarget.new(Gio.File, Gdk.DragAction.COPY)
@@ -693,29 +742,34 @@ class ViewerWindow(Adw.ApplicationWindow):
         self.pending = (view.index, view.rect)
         self._open_sign_dialog()
 
-    def _open_sign_dialog(self) -> None:
+    def _open_sign_dialog(self, preferred: identities.Identity | None = None,
+                          initial_secret: str = "") -> None:
         available = identities.discover()
         if not available:
-            compat.alert(
-                self,
-                S.NO_IDENTITIES_TITLE,
-                S.NO_IDENTITIES_BODY.format(path=identities.IDENTITY_DIR),
-                [("cancel", S.CANCEL), ("import", S.IMPORT_NOW)],
-                on_response=self._no_identity_response,
-                default_response="import",
-            )
+            self.show_identity_setup(on_ready=self._open_sign_dialog,
+                                     cancel_signing=True)
             return
         if self.pending:
             where = S.SIGN_WHERE_PAGE.format(page=self.pending[0] + 1)
         else:
             where = S.SIGN_WHERE_INVISIBLE
-        SignDialog(self, available, where).present(self)
+        SignDialog(self, available, where, preferred, initial_secret).present(self)
 
-    def _no_identity_response(self, response: str) -> None:
-        if response == "import":
-            self.choose_identity_file(on_imported=self._open_sign_dialog)
-        else:
-            self.cancel_signing()
+    def show_identity_setup(self, on_ready=None, cancel_signing: bool = False) -> None:
+        def selected(response: str) -> None:
+            if response == "import":
+                self.choose_identity_file(on_imported=on_ready)
+            elif response == "create":
+                CreateIdentityDialog(self, on_ready).present(self)
+            elif cancel_signing:
+                self.cancel_signing()
+
+        compat.alert(
+            self, S.IDENTITY_SETUP_TITLE, S.IDENTITY_SETUP_BODY,
+            [("cancel", S.CANCEL), ("create", S.IDENTITY_CREATE),
+             ("import", S.IMPORT_NOW)],
+            on_response=selected, default_response="import",
+        )
 
     def perform_signature(self, identity, secret: str, reason: str,
                           location: str, strong: bool, certify: bool = False,
@@ -793,13 +847,11 @@ class ViewerWindow(Adw.ApplicationWindow):
 
     def choose_identity_file(self, on_imported=None) -> None:
         def imported(path: str) -> None:
-            stored = identities.import_pkcs12(Path(path))
-            self.toast(S.IMPORT_DONE.format(name=stored.name))
-            if on_imported:
-                on_imported()
+            ImportIdentityDialog(self, Path(path), on_imported).present(self)
 
         compat.open_file(self, S.IMPORT_IDENTITY, imported,
-                         patterns=("*.p12", "*.pfx"), filter_name="PKCS#12")
+                         patterns=("*.p12", "*.pfx", "*.P12", "*.PFX"),
+                         filter_name=S.IDENTITY_FILE_FILTER)
 
     def choose_signature_image(self, on_imported=None) -> None:
         def imported(path: str) -> None:
@@ -878,6 +930,14 @@ class SignatureCenterDialog:
         visual_button.connect("clicked", self._save_appearance)
         visual.add_suffix(visual_button)
         group.add(visual)
+        identity = Adw.ActionRow(title=S.IDENTITY_PREPARE,
+                                 subtitle=S.IDENTITY_PREPARE_BODY,
+                                 css_classes=["intent-row"])
+        identity.add_prefix(Gtk.Image(icon_name="avatar-default-symbolic", pixel_size=20))
+        identity_button = Gtk.Button(label=S.IDENTITY_MANAGE, valign=Gtk.Align.CENTER)
+        identity_button.connect("clicked", self._identity)
+        identity.add_suffix(identity_button)
+        group.add(identity)
         box.append(group)
         box.append(Gtk.Label(label=S.SIGN_VISUAL_NOTE, xalign=0, wrap=True,
                              css_classes=["dim-label", "caption", "security-note"]))
@@ -898,12 +958,111 @@ class SignatureCenterDialog:
         self.dialog.close()
         self.window.choose_signature_image()
 
+    def _identity(self, *_args) -> None:
+        self.dialog.close()
+        self.window.show_identity_setup()
+
+
+class ImportIdentityDialog:
+    """Validate the file and password before it enters the identity list."""
+
+    def __init__(self, window: ViewerWindow, source: Path, on_ready=None):
+        self.window, self.source, self.on_ready = window, source, on_ready
+        self.dialog = compat.Dialog(S.IDENTITY_IMPORT_TITLE, width=500)
+        self.secret_row, self._secret, _set_title = compat.password_row(
+            S.IDENTITY_FILE_PASSWORD, on_activate=self._submit,
+        )
+        group = Adw.PreferencesGroup()
+        group.add(self.secret_row)
+        action = Gtk.Button(label=S.IDENTITY_IMPORT_ACTION,
+                            css_classes=["suggested-action"])
+        action.connect("clicked", self._submit)
+        header = Adw.HeaderBar(show_end_title_buttons=False)
+        self.cancel_button = Gtk.Button(label=S.CANCEL)
+        self.cancel_button.connect("clicked", lambda *_: self.dialog.close())
+        header.pack_start(self.cancel_button)
+        header.pack_end(action)
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
+                       margin_top=18, margin_bottom=22, margin_start=22, margin_end=22)
+        page.append(Gtk.Label(label=S.IDENTITY_IMPORT_BODY.format(name=source.name),
+                              wrap=True, xalign=0, css_classes=["dim-label"]))
+        page.append(group)
+        self.dialog.set_child(compat.toolbar_view(header, page))
+
+    def present(self, parent) -> None:
+        self.dialog.present(parent)
+
+    def _submit(self, *_args) -> None:
+        secret = self._secret()
+        try:
+            details = identities.inspect_pkcs12(self.source, secret)
+            stored = identities.import_pkcs12(self.source, label=details.label)
+        except Exception as exc:
+            self.window.show_error(S.IDENTITY_IMPORT_FAILED, str(exc))
+            return
+        identity = identities.Identity("pkcs12", details.label, str(stored))
+        self.dialog.close()
+        self.window.toast(S.IDENTITY_IMPORT_DONE.format(name=details.label))
+        if self.on_ready:
+            self.on_ready(identity, secret)
+
+
+class CreateIdentityDialog:
+    """Acrobat-compatible local identity, with no certificate jargon."""
+
+    def __init__(self, window: ViewerWindow, on_ready=None):
+        self.window, self.on_ready = window, on_ready
+        self.dialog = compat.Dialog(S.IDENTITY_CREATE_TITLE, width=520)
+        self.name_row, self._name = compat.entry_row(S.IDENTITY_NAME)
+        self.email_row, self._email = compat.entry_row(S.IDENTITY_EMAIL)
+        self.password_row, self._password, _ = compat.password_row(S.IDENTITY_PASSWORD)
+        self.confirm_row, self._confirm, _ = compat.password_row(S.IDENTITY_PASSWORD_CONFIRM,
+                                                                  on_activate=self._submit)
+        group = Adw.PreferencesGroup()
+        for row in (self.name_row, self.email_row, self.password_row, self.confirm_row):
+            group.add(row)
+        action = Gtk.Button(label=S.IDENTITY_CREATE_ACTION,
+                            css_classes=["suggested-action"])
+        action.connect("clicked", self._submit)
+        header = Adw.HeaderBar(show_end_title_buttons=False)
+        self.cancel_button = Gtk.Button(label=S.CANCEL)
+        self.cancel_button.connect("clicked", lambda *_: self.dialog.close())
+        header.pack_start(self.cancel_button)
+        header.pack_end(action)
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
+                       margin_top=18, margin_bottom=22, margin_start=22, margin_end=22)
+        page.append(Gtk.Label(label=S.IDENTITY_CREATE_BODY, wrap=True, xalign=0,
+                              css_classes=["dim-label"]))
+        page.append(group)
+        self.dialog.set_child(compat.toolbar_view(header, page))
+
+    def present(self, parent) -> None:
+        self.dialog.present(parent)
+
+    def _submit(self, *_args) -> None:
+        secret = self._password()
+        if secret != self._confirm():
+            self.window.show_error(S.IDENTITY_IMPORT_FAILED, S.IDENTITY_PASSWORD_MISMATCH)
+            return
+        try:
+            stored = identities.create_local(self._name(), self._email(), secret)
+        except Exception as exc:
+            self.window.show_error(S.IDENTITY_IMPORT_FAILED, str(exc))
+            return
+        identity = identities.Identity("pkcs12", self._name().strip(), str(stored))
+        self.dialog.close()
+        self.window.toast(S.IDENTITY_IMPORT_DONE.format(name=identity.label))
+        if self.on_ready:
+            self.on_ready(identity, secret)
+
 
 class SignDialog:
     """One screen, four decisions, and only the first one is mandatory."""
 
     def __init__(self, window: ViewerWindow, available: list[identities.Identity],
-                 where: str | None = None):
+                 where: str | None = None,
+                 preferred: identities.Identity | None = None,
+                 initial_secret: str = ""):
         self.window = window
         self.available = available
         self.dialog = compat.Dialog(S.SIGN_DIALOG_TITLE, width=560)
@@ -913,17 +1072,19 @@ class SignDialog:
             subtitle=f"{S.SIGN_IDENTITY_HINT}\n{where or ''}",
             model=Gtk.StringList.new([i.label for i in available]),
         )
-        self.identity_row.connect("notify::selected", lambda *_: self._sync_secret_title())
         last = state.load().get("last_identity")
         for position, identity in enumerate(available):
-            if identity.label == last:
+            if (preferred and identity.path == preferred.path) or (
+                    not preferred and identity.label == last):
                 self.identity_row.set_selected(position)
                 break
 
         self.secret_row, self._secret_text, self._set_secret_title = compat.password_row(
             available[self.identity_row.get_selected()].secret_prompt,
             on_activate=self._submit,
+            initial_text=initial_secret,
         )
+        self.identity_row.connect("notify::selected", lambda *_: self._sync_secret_title())
         self.reason_row, self._reason_text = compat.entry_row(S.SIGN_REASON)
         self.location_row, self._location_text = compat.entry_row(S.SIGN_LOCATION)
         self.appearance_options = []
@@ -961,6 +1122,9 @@ class SignDialog:
         sign_button.connect("clicked", self._submit)
 
         header = Adw.HeaderBar(show_end_title_buttons=False)
+        self.back_button = Gtk.Button(label=S.BACK)
+        self.back_button.connect("clicked", lambda *_: self.dialog.close())
+        header.pack_start(self.back_button)
         header.pack_end(sign_button)
 
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
@@ -981,6 +1145,8 @@ class SignDialog:
         self._set_secret_title(
             self.available[self.identity_row.get_selected()].secret_prompt
         )
+        # A file password must never become the PIN of another selected device.
+        compat.set_entry_text(self.secret_row, "")
 
     def _submit(self, *_args) -> None:
         identity = self.available[self.identity_row.get_selected()]

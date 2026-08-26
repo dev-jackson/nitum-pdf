@@ -92,7 +92,7 @@ def download_and_verify(release: Release, opener=urllib.request.urlopen) -> Path
     return package
 
 
-def install_deb(package: Path) -> None:
+def install_deb(package: Path) -> subprocess.Popen:
     if package.suffix != ".deb" or not package.is_file():
         raise ValueError("el archivo de actualización no es un paquete .deb")
-    subprocess.Popen(["pkexec", "apt-get", "install", "-y", str(package)])
+    return subprocess.Popen(["pkexec", "apt-get", "install", "-y", str(package)])
