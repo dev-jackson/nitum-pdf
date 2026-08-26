@@ -2,7 +2,9 @@
 
 ![Nitum](data/org.pwview.PdfViewer.svg)
 
-**Nitum PDF** es un visor de PDF para Linux con firma digital comprensible.
+**Nitum PDF** es un visor PDF nativo para Linux, macOS y Windows con firma
+digital comprensible. Está construido íntegramente en Rust y Slint, sin Python
+ni WebView en ejecución, pruebas o empaquetado.
 Permite abrir, buscar, firmar y verificar documentos sin confundir la integridad
 del archivo con la identidad del firmante.
 
@@ -11,14 +13,24 @@ confiables y sin complejidad innecesaria.
 
 ## Funciones
 
-- Desplazamiento continuo, zoom, búsqueda y copia de texto.
-- Firma visible o invisible con certificados `.p12`/`.pfx` y tokens PKCS#11.
-- Apariencia de firma visual guardada y reutilizable, siempre respaldada por el certificado.
-- Flujo guiado para firmar, certificar o comprobar firmas recibidas.
-- Sello de tiempo RFC 3161 y validación a largo plazo activados por defecto.
+- Desplazamiento continuo, zoom, búsqueda, copia de página y selección
+  rectangular de texto con resaltado y portapapeles nativo.
+- Firma visible colocable con un clic —o invisible— mediante certificados
+  `.p12`/`.pfx` y tokens PKCS#11.
+- Bibliotecas para elegir y reutilizar varias identidades y firmas visuales
+  guardadas. Las apariencias aceptan PNG, JPEG, GIF, BMP, TIFF y WebP, se
+  normalizan de forma segura y siempre están respaldadas por el certificado.
+- Flujo guiado para firmar o comprobar firmas recibidas.
+- Firma PAdES B-B/B-T/B-LT/B-LTA, sellos RFC 3161, DSS con VRI y datos
+  OCSP/CRL, y certificación DocMDP con permisos explícitos para cambios
+  posteriores. Si la cadena o la revocación están incompletas, falla de forma
+  segura en lugar de producir un nivel inferior con una etiqueta incorrecta.
 - Firmas incrementales; nunca sobrescribe el documento original.
-- Comprobación automática diaria de nuevas versiones publicadas en GitHub.
-- Descarga del `.deb`, verificación SHA-256 y actualización mediante `apt`/polkit.
+- Comprobación automática de nuevas versiones publicadas en GitHub.
+- Descarga del paquete exacto para la plataforma, verificación SHA-256,
+  instalación con autorización del sistema y reinicio recuperando el documento.
+- Procedencia firmada de cada instalador mediante GitHub Artifact Attestations;
+  Windows y macOS admiten además Authenticode y Developer ID/notarización.
 
 ### Identidades digitales compatibles
 
@@ -26,10 +38,9 @@ confiables y sin complejidad innecesaria.
   que exista una clave privada y muestra el nombre real del titular antes de firmar.
 - **Tarjetas, DNI y tokens PKCS#11:** aparecen automáticamente cuando Linux y
   `p11-kit` reconocen el dispositivo; la firma solicita su PIN.
-- **Identidad local:** puede crearse dentro de Nitum para uso personal o interno
-  y se guarda como PKCS#12 protegido por contraseña, compatible con Acrobat.
 - **`.cer`, `.crt` y certificados `.pem`:** normalmente solo contienen la parte
-  pública. Sirven para comprobar firmas, pero no pueden firmar sin la clave privada.
+  pública y no pueden firmar sin la clave privada. Nitum valida las firmas contra
+  los almacenes de confianza del sistema.
 - **Windows Certificate Store:** es una integración exclusiva de Windows. En
   Linux, el equivalente interoperable es exportar la identidad como `.pfx/.p12`.
 - **Identidades remotas:** dependen del servidor y proveedor concreto; no son un
@@ -37,33 +48,38 @@ confiables y sin complejidad innecesaria.
 
 ## Instalar
 
-Descarga el `.deb` más reciente desde
+Descarga el `.deb`, `.pkg` o `.exe` más reciente desde
 [GitHub Releases](https://github.com/dev-jackson/nitum-pdf/releases/latest) y ábrelo
 con el instalador del sistema, o ejecuta:
 
-```bash
-sudo apt install ./nitum-pdf_*_amd64.deb
-```
+En Debian/Ubuntu también puedes ejecutar `sudo apt install ./nitum-pdf-*.deb`.
 
-Nitum PDF busca versiones nuevas al iniciarse, como máximo una vez al día. También
-puedes usar **Buscar actualizaciones** desde el menú. Nunca se instala en silencio:
-primero pide confirmación y después el sistema solicita autorización administrativa.
+Nitum PDF busca versiones nuevas al iniciarse. Nunca instala en silencio: primero
+pide confirmación y después el sistema solicita autorización administrativa.
+La procedencia de un instalador descargado también puede comprobarse con:
+
+```bash
+gh attestation verify nitum-pdf-<versión>-<plataforma>-<arquitectura>.<extensión> \
+  --repo dev-jackson/nitum-pdf
+```
 
 ## Ejecutar desde el código
 
 ```bash
-sudo apt install python3-venv python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 opensc pcscd
-python3 -m venv --system-site-packages .venv
-.venv/bin/pip install -e ".[dev,pkcs11]"
-.venv/bin/nitum-pdf documento.pdf
+cd native
+./scripts/fetch-pdfium.sh debug
+cargo run --locked -- ../documento.pdf
 ```
 
 ## Construir y probar
 
 ```bash
-python -m pytest
-./packaging/build-deb.sh
-sudo apt install ./dist/nitum-pdf_*.deb
+cd native
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-targets --locked
+cd ..
+./packaging/native/build-linux-deb.sh 0.6.0
 ```
 
 ## Atajos
@@ -78,20 +94,21 @@ sudo apt install ./dist/nitum-pdf_*.deb
 | Esc | Cancelar la colocación de firma |
 
 Las decisiones de interfaz y sus referentes están documentados en
-[DESIGN.md](DESIGN.md).
+[DESIGN.md](DESIGN.md). Las mediciones reproducibles y el alcance de las pruebas
+visuales están en [docs/QUALITY_REPORT.md](docs/QUALITY_REPORT.md).
 
 ## GitFlow y releases
 
 El proyecto usa `main` para publicaciones y `develop` para integración. Consulta
 [CONTRIBUTING.md](CONTRIBUTING.md) para crear `feature/*`, `release/*` y `hotfix/*`.
-Cada etiqueta `vX.Y.Z` creada en `main` construye automáticamente el `.deb`, su
-checksum SHA-256 y un GitHub Release que la aplicación puede instalar.
+Cada etiqueta `vX.Y.Z` creada en `main` construye paquetes Linux x86_64/ARM64,
+macOS Intel/Apple Silicon y Windows x86_64, sus SHA-256 y un GitHub Release.
 
 ## Privacidad y seguridad
 
 Los documentos permanecen en el equipo. La actualización solo consulta la API
 pública de GitHub. El paquete debe coincidir con el SHA-256 del release antes de
-que Nitum PDF permita instalarlo mediante `apt`.
+que Nitum PDF lo entregue al instalador autorizado del sistema.
 
 Las identidades existentes de `pw-view-pdf` se conservan durante la migración.
 

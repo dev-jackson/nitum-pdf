@@ -5,7 +5,7 @@ La pregunta de control para cada pantalla es:
 > ¿Una persona que viene de Acrobat entiende qué puede hacer, qué ocurrirá y
 > cuál es el siguiente paso sin conocer certificados?
 
-## Referentes principales, no imitaciones
+## Cinco referentes, no imitaciones
 
 - **Adobe Acrobat:** separar firma visual, firma digital, certificación y
   validación; conservar el modelo mental de colocar y luego confirmar.
@@ -16,9 +16,8 @@ La pregunta de control para cada pantalla es:
   ventana y divulgación progresiva. El color siempre se acompaña de icono y texto.
 - **Stripe:** los pasos sensibles explican en lenguaje concreto qué va a pasar,
   separan los datos por función y ofrecen una sola acción principal inequívoca.
-
-Notion y Figma se conservan como referencias secundarias para atajos previsibles
-y herramientas que aparecen en el contexto donde actúan.
+- **Figma:** herramientas contextuales, estados inmediatos y atajos previsibles
+  sin apartar a la persona del documento que está manipulando.
 
 ## Reglas verificables
 
