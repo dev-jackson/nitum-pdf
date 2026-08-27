@@ -221,13 +221,12 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                IconAction {
+                if root.document-open: IconAction {
                     icon: root.search-open
                         ? @image-url("../../data/icons/close.svg")
                         : @image-url("../../data/icons/search.svg");
                     hint: root.search-open ? "Cerrar la búsqueda" : "Buscar en el documento";
                     active: root.search-open;
-                    enabled: root.document-open;
                     clicked => { root.search-open = !root.search-open; root.search-status = ""; }
                 }
                 IconAction {
@@ -248,13 +247,12 @@ export component AppWindow inherits Window {
                     clicked => { root.check-updates(); }
                 }
 
-                Rectangle { width: Space.xs; }
+                if root.document-open: Rectangle { width: Space.xs; }
 
-                ActionButton {
+                if root.document-open: ActionButton {
                     label: root.compact-header ? "Firmar" : "Firmar este PDF";
                     icon: @image-url("../../data/icons/sign.svg");
                     tone: ButtonTone.primary;
-                    enabled: root.document-open;
                     clicked => { root.show-signature-center(); }
                 }
             }
@@ -981,14 +979,16 @@ export component AppWindow inherits Window {
                     : "Nitum PDF está actualizado";
             subtitle: root.update-available
                 ? "Comprobamos su SHA-256 antes de instalarlo."
-                : "Versión instalada: " + root.current-version + ". La comprobación consulta únicamente los releases oficiales.";
+                : "Versión instalada: " + root.current-version + ".";
             width: min(parent.width - 2 * Space.xl, 480px);
             available-height: parent.height - 2 * Space.xl;
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
-            primary-label: root.update-available ? (root.update-busy ? "Actualizando…" : "Actualizar y reiniciar") : "";
+            primary-label: root.update-available
+                ? (root.update-busy ? "Actualizando…" : "Actualizar y reiniciar")
+                : "";
             primary-enabled: !root.update-busy && !root.update-checking;
-            secondary-label: root.update-available ? "Ahora no" : "";
+            secondary-label: root.update-available ? "Ahora no" : "Cerrar";
             closed => { root.close-dialog(); }
             secondary-activated => { root.close-dialog(); }
             primary-activated => { root.install-update(); }
@@ -1008,11 +1008,6 @@ export component AppWindow inherits Window {
                 color: Theme.text-secondary;
                 font-size: Type.small;
                 wrap: word-wrap;
-            }
-            if !root.update-available && !root.update-checking: ActionButton {
-                label: "Cerrar";
-                tone: ButtonTone.secondary;
-                clicked => { root.close-dialog(); }
             }
         }
 
