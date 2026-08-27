@@ -377,6 +377,10 @@ pub fn run<P: DocumentPicker + 'static>(
         update_service,
         update_installer,
     } = services;
+    // Wayland and X11 match a window to its desktop entry through the XDG application id,
+    // so without this the shell has no way to find com.nitum.Pdf.desktop and shows no icon.
+    // It only applies to those platforms; elsewhere the call is inert.
+    let _ = slint::set_xdg_app_id("com.nitum.Pdf");
     let ui = AppWindow::new()?;
     let active_document: ActiveDocument = Arc::new(Mutex::new(None));
     let pending_document: PendingDocument = Arc::new(Mutex::new(None));
