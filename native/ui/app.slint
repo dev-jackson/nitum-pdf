@@ -185,7 +185,7 @@ export component AppWindow inherits Window {
                     Rectangle { width: 1px; height: 20px; background: Theme.border; }
                 }
 
-                VerticalLayout {
+                if !(root.compact-header && root.search-open): VerticalLayout {
                     alignment: center;
                     spacing: 0px;
                     horizontal-stretch: 1;
@@ -325,22 +325,20 @@ export component AppWindow inherits Window {
                             background: white; border-radius: 3px;
                             accessible-role: image;
                             accessible-label: "Página " + page.number + " de " + root.page-count;
-                            drop-shadow-blur: 24px; drop-shadow-color: #10182824; drop-shadow-offset-y: 10px;
+                            drop-shadow-blur: 24px; drop-shadow-color: Theme.shadow-page; drop-shadow-offset-y: 10px;
                             if page.loaded: Image { source: page.image; image-fit: contain; }
                             if !page.loaded && page.error == "": VerticalLayout {
                                 alignment: center; spacing: 10px;
                                 ProgressIndicator { indeterminate: true; width: 140px; height: 3px; }
-                                Text { text: "Página " + page.number; color: #667085; horizontal-alignment: center; }
+                                Text { text: "Página " + page.number; color: Theme.text-secondary; font-size: Type.small; horizontal-alignment: center; }
                             }
-                            if page.error != "": Text { text: page.error; color: #b42318; wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center; }
+                            if page.error != "": Text { text: page.error; color: Theme.danger; font-size: Type.small; wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center; }
                             if root.placement-mode: Rectangle {
-                                background: #2563eb18; border-width: 2px; border-color: Theme.accent;
-                                Text {
-                                    text: "Haz clic donde quieres mostrar la firma";
-                                    color: #1746b5; font-weight: 700;
-                                    horizontal-alignment: center; vertical-alignment: center;
-                                }
+                                background: transparent;
+                                border-width: 2px;
+                                border-color: Theme.accent;
                                 place := TouchArea {
+                                    mouse-cursor: crosshair;
                                     clicked => {
                                         root.signature-page = index;
                                         root.signature-x = place.mouse-x / parent.width;
@@ -353,23 +351,20 @@ export component AppWindow inherits Window {
                                 }
                             }
                             if root.selection-mode: Rectangle {
-                                background: #2563eb0d;
-                                border-width: 2px; border-color: Theme.accent;
-                                Text {
-                                    visible: !root.selection-active;
-                                    y: 24px; height: 44px;
-                                    text: "Arrastra sobre el texto que quieres copiar";
-                                    color: #1746b5; font-weight: 700;
-                                    horizontal-alignment: center; vertical-alignment: center;
-                                }
+                                background: transparent;
+                                border-width: 2px;
+                                border-color: Theme.accent;
                                 if root.selection-active: Rectangle {
                                     x: min(root.selection-start-x, root.selection-current-x) * parent.width;
                                     y: min(root.selection-start-y, root.selection-current-y) * parent.height;
                                     width: abs(root.selection-current-x - root.selection-start-x) * parent.width;
                                     height: abs(root.selection-current-y - root.selection-start-y) * parent.height;
-                                    background: #2563eb38; border-width: 1px; border-color: Theme.accent;
+                                    background: Theme.accent-soft;
+                                    border-width: 1px;
+                                    border-color: Theme.accent;
                                 }
                                 select-area := TouchArea {
+                                    mouse-cursor: crosshair;
                                     pointer-event(event) => {
                                         if event.kind == PointerEventKind.down {
                                             root.selection-active = true;
@@ -397,20 +392,57 @@ export component AppWindow inherits Window {
                 if root.document-loading: VerticalLayout {
                     alignment: center; spacing: 12px;
                     ProgressIndicator { indeterminate: true; width: 160px; height: 3px; }
-                    Text { text: "Preparando documento…"; color: Theme.text-secondary; horizontal-alignment: center; }
+                    Text { text: "Preparando documento…"; color: Theme.text-secondary; font-size: Type.body; horizontal-alignment: center; }
                 }
                 if root.document-error != "": VerticalLayout {
                     alignment: center; spacing: 12px; padding: 64px;
-                    Text { text: "No pudimos mostrar este PDF"; color: #b42318; font-size: 20px; font-weight: 700; horizontal-alignment: center; }
-                    Text { text: root.document-error; color: Theme.text-secondary; wrap: word-wrap; horizontal-alignment: center; }
-                    Button { text: "Elegir otro PDF"; clicked => { root.open-document(); } }
+                    Text {
+                        text: "No pudimos mostrar este PDF";
+                        color: Theme.text;
+                        font-size: Type.title;
+                        font-weight: Type.bold;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: root.document-error;
+                        color: Theme.text-secondary;
+                        font-size: Type.body;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                    HorizontalLayout {
+                        alignment: center;
+                        ActionButton {
+                            label: "Elegir otro PDF";
+                            icon: @image-url("../../data/icons/folder-open.svg");
+                            tone: ButtonTone.primary;
+                            clicked => { root.open-document(); }
+                        }
+                    }
                 }
             }
-            if root.viewer-status != "" && root.active-dialog == 0 && !root.placement-mode: Rectangle {
-                x: (parent.width - self.width) / 2; y: 18px;
-                width: 300px; height: 42px; border-radius: 13px;
-                background: Theme.raised; border-width: 1px; border-color: Theme.border;
-                Text { text: root.viewer-status; color: Theme.text; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+            if root.viewer-status != "" && root.active-dialog == 0 && !root.placement-mode && !root.selection-mode: Rectangle {
+                width: toast.preferred-width;
+                height: 36px;
+                x: (parent.width - self.width) / 2;
+                y: Space.lg;
+                border-radius: Radius.md;
+                background: Theme.raised;
+                border-width: 1px;
+                border-color: Theme.border;
+                drop-shadow-blur: 16px;
+                drop-shadow-color: Theme.shadow-raised;
+                drop-shadow-offset-y: 4px;
+                toast := HorizontalLayout {
+                    padding-left: Space.md;
+                    padding-right: Space.md;
+                    Text {
+                        text: root.viewer-status;
+                        color: Theme.text;
+                        font-size: Type.small;
+                        vertical-alignment: center;
+                    }
+                }
             }
             // Reading controls float over the document, Figma-style, and the page
             // list reserves room for them so they never cover a line of text.
@@ -424,7 +456,7 @@ export component AppWindow inherits Window {
                 border-width: 1px;
                 border-color: Theme.border;
                 drop-shadow-blur: 20px;
-                drop-shadow-color: #0f172a2e;
+                drop-shadow-color: Theme.shadow-floating;
                 drop-shadow-offset-y: 6px;
                 bar := HorizontalLayout {
                     padding-left: Space.sm;
@@ -494,7 +526,20 @@ export component AppWindow inherits Window {
                         Rectangle { width: 1px; height: 20px; background: Theme.border; }
                     }
 
-                    ActionButton {
+                    if root.compact-header: IconAction {
+                        icon: @image-url("../../data/icons/select-text.svg");
+                        hint: "Seleccionar una zona de texto";
+                        clicked => {
+                            root.selection-mode = true;
+                            root.viewer-status = "Arrastra sobre el texto que quieres copiar · Esc para cancelar";
+                        }
+                    }
+                    if root.compact-header: IconAction {
+                        icon: @image-url("../../data/icons/copy.svg");
+                        hint: "Copiar el texto de la página";
+                        clicked => { root.copy-current-page(); }
+                    }
+                    if !root.compact-header: ActionButton {
                         label: "Seleccionar";
                         tone: ButtonTone.ghost;
                         clicked => {
@@ -502,7 +547,7 @@ export component AppWindow inherits Window {
                             root.viewer-status = "Arrastra sobre el texto que quieres copiar · Esc para cancelar";
                         }
                     }
-                    ActionButton {
+                    if !root.compact-header: ActionButton {
                         label: "Copiar página";
                         icon: @image-url("../../data/icons/copy.svg");
                         tone: ButtonTone.ghost;
@@ -510,34 +555,59 @@ export component AppWindow inherits Window {
                     }
                 }
             }
-            if root.document-open && root.selection-mode: Rectangle {
-                x: (parent.width - self.width) / 2; y: parent.height - self.height - 20px;
-                width: 500px; height: 56px; border-radius: 17px;
-                background: Theme.raised; border-width: 1px; border-color: Theme.border;
-                HorizontalLayout {
-                    padding-top: 8px; padding-bottom: 8px; padding-left: 12px; padding-right: 8px;
-                    spacing: 12px; alignment: center;
-                    Text { text: "Selecciona una zona para copiar su texto"; color: Theme.text; font-weight: 700; }
-                    Rectangle { horizontal-stretch: 1; }
-                    Button { text: "Cancelar"; clicked => { root.selection-mode = false; root.selection-active = false; root.viewer-status = "Selección cancelada"; } }
-                }
-            }
-            if root.document-open && root.placement-mode: Rectangle {
-                x: (parent.width - self.width) / 2; y: parent.height - self.height - 20px;
-                width: 500px; height: 56px; border-radius: 17px;
-                background: Theme.raised; border-width: 1px; border-color: Theme.border;
-                drop-shadow-blur: 22px; drop-shadow-color: #10182830; drop-shadow-offset-y: 8px;
-                HorizontalLayout {
-                    padding-top: 8px; padding-bottom: 8px; padding-left: 12px; padding-right: 8px;
-                    spacing: 12px; alignment: center;
-                    Text { text: "Elige dónde mostrar la firma"; color: Theme.text; font-weight: 700; }
-                    Rectangle { horizontal-stretch: 1; }
-                    Button {
-                        text: "Cancelar";
+            if root.document-open && (root.selection-mode || root.placement-mode): Rectangle {
+                width: mode-bar.preferred-width;
+                height: 44px;
+                x: (parent.width - self.width) / 2;
+                y: parent.height - self.height - Space.lg;
+                border-radius: Radius.lg;
+                background: Theme.raised;
+                border-width: 1px;
+                border-color: Theme.accent;
+                drop-shadow-blur: 20px;
+                drop-shadow-color: Theme.shadow-floating;
+                drop-shadow-offset-y: 6px;
+                mode-bar := HorizontalLayout {
+                    padding-left: Space.md;
+                    padding-right: Space.sm;
+                    padding-top: Space.xs;
+                    padding-bottom: Space.xs;
+                    spacing: Space.md;
+                    VerticalLayout {
+                        alignment: center;
+                        Image {
+                            source: root.placement-mode
+                                ? @image-url("../../data/icons/sign.svg")
+                                : @image-url("../../data/icons/copy.svg");
+                            width: 18px;
+                            height: 18px;
+                            colorize: Theme.accent;
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: root.placement-mode
+                                ? "Haz clic en el punto donde quieres la firma"
+                                : "Arrastra sobre el texto que quieres copiar";
+                            color: Theme.text;
+                            font-size: Type.body;
+                            font-weight: Type.medium;
+                        }
+                    }
+                    ActionButton {
+                        label: "Cancelar";
+                        tone: ButtonTone.secondary;
                         clicked => {
-                            root.placement-mode = false;
-                            root.active-dialog = 2;
-                            root.viewer-status = "Colocación cancelada";
+                            if (root.placement-mode) {
+                                root.placement-mode = false;
+                                root.active-dialog = 2;
+                                root.viewer-status = "Colocación cancelada";
+                            } else {
+                                root.selection-mode = false;
+                                root.selection-active = false;
+                                root.viewer-status = "Selección cancelada";
+                            }
                         }
                     }
                 }
