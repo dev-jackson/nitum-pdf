@@ -37,8 +37,8 @@ jobs:
       - run: rustup update stable && rustup default stable
       - name: Build native Debian package
         run: packaging/native/build-linux-deb.sh "${GITHUB_REF_NAME#v}"
-      - name: Create checksum
-        run: cd dist && sha256sum ./*.deb > "nitum-pdf-${GITHUB_REF_NAME#v}-linux-${{ matrix.arch }}.deb.sha256"
+      - name: Add legacy updater alias and checksums
+        run: packaging/native/create-linux-release-assets.sh "${GITHUB_REF_NAME#v}" "${{ matrix.arch }}"
       - name: Attest Linux artifacts
         uses: actions/attest@v4
         with:
