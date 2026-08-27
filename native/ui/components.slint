@@ -142,8 +142,10 @@ export component Field inherits VerticalLayout {
     @children
     if root.help != "": Text {
         text: root.help;
-        color: Theme.text-tertiary;
-        font-size: Type.caption;
+        color: Theme.text-secondary;
+        font-size: Type.small;
+        min-height: 18px;
+        vertical-stretch: 0;
         wrap: word-wrap;
     }
 }
@@ -232,7 +234,7 @@ export component ChoiceRow inherits Rectangle {
             Rectangle {
                 width: 18px;
                 height: 18px;
-                border-radius: 9px;
+                border-radius: self.width / 2;
                 border-width: root.is-selected ? 0px : 1px;
                 border-color: Theme.border-strong;
                 background: root.is-selected ? Theme.accent : transparent;
@@ -257,7 +259,7 @@ export component ChoiceRow inherits Rectangle {
 
         VerticalLayout {
             alignment: center;
-            spacing: 2px;
+            spacing: Space.xs;
             horizontal-stretch: 1;
             Text {
                 text: root.title;
@@ -366,6 +368,8 @@ export component Dialog inherits Rectangle {
                 text: root.subtitle;
                 color: Theme.text-secondary;
                 font-size: Type.body;
+                min-height: 18px;
+                vertical-stretch: 0;
                 wrap: word-wrap;
             }
         }
@@ -477,7 +481,7 @@ export component Toggle inherits Rectangle {
             }
         }
         VerticalLayout {
-            spacing: 2px;
+            spacing: Space.xs;
             horizontal-stretch: 1;
             Text {
                 text: root.label;
@@ -488,6 +492,8 @@ export component Toggle inherits Rectangle {
                 text: root.help;
                 color: Theme.text-tertiary;
                 font-size: Type.small;
+                min-height: 17px;
+                vertical-stretch: 0;
                 wrap: word-wrap;
             }
         }

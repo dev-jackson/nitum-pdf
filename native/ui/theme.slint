@@ -50,6 +50,8 @@ export global Theme {
     out property <color> surface: dark ? #171a21 : #ffffff;
     out property <color> raised: dark ? #262b36 : #f7f8fb;
     out property <color> sunken: dark ? #0b0d11 : #e9ebf1;
+    // A page of the document is white in both themes: it is the paper, not chrome.
+    out property <color> page: #ffffff;
 
     // Text. `secondary` holds AA against surface; `tertiary` is for non-essential detail only.
     out property <color> text: dark ? #f6f7fa : #14171f;

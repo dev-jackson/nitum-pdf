@@ -311,7 +311,8 @@ export component AppWindow inherits Window {
             }
             if root.document-open: Rectangle {
                 VerticalLayout {
-                    padding-bottom: 76px;
+                    // Room for the floating reading bar: 44 px tall plus lg above and below.
+                    padding-bottom: 44px + 2 * Space.lg;
                 pages-view := ListView {
                     viewport-y <=> root.pages-scroll-y;
                     for page[index] in root.pages: Rectangle {
@@ -320,13 +321,13 @@ export component AppWindow inherits Window {
                         Rectangle {
                             x: (parent.width - self.width) / 2; y: 16px;
                             width: root.page-base-width * root.zoom-percent / 100; height: self.width * page.aspect;
-                            background: white; border-radius: 3px;
+                            background: Theme.page; border-radius: Radius.sm;
                             accessible-role: image;
                             accessible-label: "Página " + page.number + " de " + root.page-count;
                             drop-shadow-blur: 24px; drop-shadow-color: Theme.shadow-page; drop-shadow-offset-y: 10px;
                             if page.loaded: Image { source: page.image; image-fit: contain; }
                             if !page.loaded && page.error == "": VerticalLayout {
-                                alignment: center; spacing: 10px;
+                                alignment: center; spacing: Space.sm;
                                 ProgressIndicator { indeterminate: true; width: 140px; height: 3px; }
                                 Text { text: "Página " + page.number; color: Theme.text-secondary; font-size: Type.small; horizontal-alignment: center; }
                             }
@@ -388,12 +389,12 @@ export component AppWindow inherits Window {
                 }
                 }
                 if root.document-loading: VerticalLayout {
-                    alignment: center; spacing: 12px;
+                    alignment: center; spacing: Space.md;
                     ProgressIndicator { indeterminate: true; width: 160px; height: 3px; }
                     Text { text: "Preparando documento…"; color: Theme.text-secondary; font-size: Type.body; horizontal-alignment: center; }
                 }
                 if root.document-error != "": VerticalLayout {
-                    alignment: center; spacing: 12px; padding: 64px;
+                    alignment: center; spacing: Space.md; padding: Space.section;
                     Text {
                         text: "No pudimos mostrar este PDF";
                         color: Theme.text;
@@ -702,7 +703,7 @@ export component AppWindow inherits Window {
                         }
                         VerticalLayout {
                             alignment: center;
-                            spacing: 2px;
+                            spacing: Space.xs;
                             horizontal-stretch: 1;
                             Text {
                                 text: root.identity-kind == 1

@@ -29,7 +29,7 @@ Seis tamaños. Antes había trece, que es lo mismo que no tener ninguno.
 | Token | Tamaño | Uso |
 | --- | --- | --- |
 | `Type.caption` | 11 px | Metadatos que se pueden ignorar sin perder nada |
-| `Type.small` | 12 px | Texto de apoyo, ayuda de un campo, acción de una fila |
+| `Type.small` | 12 px | Texto de apoyo, ayuda de un campo, acción de una fila. **Mínimo para texto que aporta algo** |
 | `Type.body` | 13 px | Texto normal, etiquetas de botón, títulos de fila |
 | `Type.emphasis` | 14 px | Texto principal de un estado vacío |
 | `Type.title` | 17 px | Título de diálogo |
@@ -39,9 +39,19 @@ Pesos: `regular` 400, `medium` 500, `semibold` 600, `bold` 700. **La jerarquía
 la lleva el peso, no el tamaño**: entre un título de fila y su descripción hay
 un salto de un punto de tamaño (13 → 12) y dos de peso (600 → 400).
 
-Slint 1.17 **no tiene `line-height`**, comprobado contra el compilador. Por eso
-la regla práctica es: si un texto de apoyo necesita dos líneas, se reescribe
-más corto. Es la razón de que los subtítulos de los diálogos sean tan breves.
+Slint 1.17 **no tiene `line-height`**, comprobado contra el compilador. De ahí
+dos reglas prácticas:
+
+- Si un texto de apoyo necesita dos líneas, se reescribe más corto. Es la razón
+  de que los subtítulos de los diálogos sean tan breves.
+- Todo texto de varias líneas lleva `min-height` explícito, porque sin suelo el
+  layout lo comprime y le corta los ascendentes.
+
+**A 11 px el renderizador corta los ascendentes y los acentos**, verificado
+ampliando las capturas a 3×: en «firmar» se perdían la `f` y la `t`, y en
+«ningún» la tilde. Por eso `caption` queda reservado a metadatos prescindibles y
+el texto de ayuda usa `small` (12 px). El mismo texto a 17 px sale íntegro, así
+que no es un defecto del renderizador de pruebas sino del tamaño.
 
 ### Espaciado
 
@@ -123,7 +133,7 @@ Cuatro decisiones que salieron de medir:
 | Ancho de diálogo | 460 / 520 / 560 / 620 px | Según cuánto contiene, no según una constante |
 | Alto de diálogo | el de su contenido, tope: ventana − 48 px | Antes era fijo y sobraban 190 px o se cortaba |
 | Ancho de página | ventana − 80 px, entre 320 y 1400 | Zoom 100 % **es** ajustar al ancho |
-| Hueco bajo el documento | 76 px | La barra flotante nunca tapa un renglón |
+| Hueco bajo el documento | 76 px (44 + 2 × `lg`) | La barra flotante nunca tapa un renglón |
 | Umbral compacto | 900 px | Debajo, el título cede y las acciones pasan a iconos |
 
 Alineación comprobada midiendo las capturas, no a ojo: en el centro de firma la
@@ -146,7 +156,11 @@ mínimo 96.
 | `danger` | `danger` | ninguno | Sólo lo irreversible |
 
 Estados: reposo, `hover` (fondo `accent-hover` o `accent-soft`), `pressed`
-(`accent-pressed`), `focus` (borde 2 px), `disabled` (opacidad 0.4).
+(`accent-pressed`), `focus` (borde 2 px en `focus-ring`), `disabled` (superficie
+`raised` con tinta `text-tertiary` y borde, nunca un acento desvaído: un botón
+difuminado se lee como un fallo de dibujo, no como un botón inactivo).
+
+No hay animación de fondo, por la misma razón que en `ChoiceRow`.
 
 **Los botones vecinos comparten variante.** Un `ghost` termina donde acaba su
 etiqueta y un `secondary` donde acaba su marco: mezclados, sus bordes derechos
