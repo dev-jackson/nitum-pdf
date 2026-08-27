@@ -79,7 +79,7 @@ cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets --locked
 cd ..
-./packaging/native/build-linux-deb.sh 0.6.0
+./packaging/native/build-linux-deb.sh 0.6.1
 ```
 
 ## Atajos
@@ -104,6 +104,8 @@ El proyecto usa `main` para publicaciones y `develop` para integración. Consult
 Cada etiqueta `vX.Y.Z` creada en `main` construye paquetes Linux x86_64/ARM64,
 sus SHA-256, attestations de procedencia y un GitHub Release. macOS y Windows
 siguen verificándose en CI y se incorporarán a la distribución más adelante.
+La release incluye alias `amd64`/`arm64` autenticados para que las instalaciones
+0.5 también puedan descubrir y verificar la transición automática a Rust.
 
 ## Privacidad y seguridad
 
