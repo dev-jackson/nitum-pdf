@@ -48,30 +48,32 @@ export global Theme {
     // Surfaces, from furthest back to closest to the eye.
     out property <color> canvas: dark ? #0f1115 : #f4f5f8;
     out property <color> surface: dark ? #171a21 : #ffffff;
-    out property <color> raised: dark ? #1e222b : #ffffff;
+    out property <color> raised: dark ? #262b36 : #f7f8fb;
     out property <color> sunken: dark ? #0b0d11 : #e9ebf1;
 
     // Text. `secondary` holds AA against surface; `tertiary` is for non-essential detail only.
     out property <color> text: dark ? #f6f7fa : #14171f;
     out property <color> text-secondary: dark ? #b3bac7 : #5a6070;
-    out property <color> text-tertiary: dark ? #8b94a5 : #767d8d;
-    out property <color> text-on-accent: #ffffff;
+    out property <color> text-tertiary: dark ? #8b94a5 : #6b7280;
+    // Ink on a filled accent surface. Dark mode uses a dark ink because a
+    // light accent bright enough to read as an accent cannot carry white text.
+    out property <color> text-on-accent: dark ? #0d1220 : #ffffff;
 
     // Lines. Hairlines separate; never draw a box where a hairline is enough.
-    out property <color> border: dark ? #ffffff1f : #0f172a1f;
-    out property <color> border-strong: dark ? #ffffff33 : #0f172a33;
+    out property <color> border: dark ? #ffffff2e : #0f172a29;
+    out property <color> border-strong: dark ? #ffffff7a : #0f172a8a;
 
     // One accent for interaction. The brand red belongs to the icon and to danger,
     // so it never competes with the primary action of a screen.
-    out property <color> accent: dark ? #5b8cff : #2f5fe0;
+    out property <color> accent: dark ? #7aa2ff : #2f5fe0;
     out property <color> accent-hover: dark ? #7ba2ff : #2450c4;
     out property <color> accent-pressed: dark ? #4a79e6 : #1c40a3;
     out property <color> accent-soft: dark ? #5b8cff24 : #2f5fe014;
 
-    out property <color> success: dark ? #3ecf8e : #0f8f5b;
-    out property <color> success-soft: dark ? #3ecf8e24 : #0f8f5b14;
-    out property <color> warning: dark ? #f0b429 : #a86800;
-    out property <color> warning-soft: dark ? #f0b42924 : #a8680014;
+    out property <color> success: dark ? #3ecf8e : #0a7a4c;
+    out property <color> success-soft: dark ? #3ecf8e24 : #0a7a4c0f;
+    out property <color> warning: dark ? #f0b429 : #8a5500;
+    out property <color> warning-soft: dark ? #f0b42924 : #8a55000f;
     out property <color> danger: dark ? #ff6b6b : #c4242f;
     out property <color> danger-soft: dark ? #ff6b6b24 : #c4242f14;
 

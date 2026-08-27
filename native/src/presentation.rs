@@ -672,16 +672,15 @@ pub fn run<P: DocumentPicker + 'static>(
                     .ok_or_else(|| anyhow::anyhow!("No hay un PDF abierto."))?;
                 let hits = pdf.search(&query, 500)?;
                 let first_page = hits.first().map(|hit| hit.page_index);
-                let bitmap =
-                    if let Some(page) = first_page {
-                        let size = pdf.page_size(page)?;
-                        Some(pdf.render_page(
-                            page,
-                            (base_width / size.width_points.max(1.0)).clamp(0.1, 8.0),
-                        )?)
-                    } else {
-                        None
-                    };
+                let bitmap = if let Some(page) = first_page {
+                    let size = pdf.page_size(page)?;
+                    Some(pdf.render_page(
+                        page,
+                        (base_width / size.width_points.max(1.0)).clamp(0.1, 8.0),
+                    )?)
+                } else {
+                    None
+                };
                 Ok::<_, anyhow::Error>((hits.len(), first_page, bitmap))
             })();
             let _ = slint::invoke_from_event_loop(move || {
