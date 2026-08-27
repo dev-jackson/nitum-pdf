@@ -146,7 +146,9 @@ fn light_dark_and_signature_center_render_headlessly() {
     ui.set_identity_path("identity.p12".into());
     ui.set_active_dialog(2);
     assert_accessible_controls(&ui, "signing flow");
-    assert_accessible_action(&ui, "Cancelar", "signing flow");
+    // Every step keeps two ways out: back to the previous step, and close.
+    assert_accessible_action(&ui, "Atrás", "signing flow");
+    assert_accessible_action(&ui, "Cerrar", "signing flow");
     let signing = ui.window().take_snapshot().unwrap();
     assert_ne!(document.as_bytes(), signing.as_bytes());
     save_if_requested("signing-flow-dark.png", &signing);

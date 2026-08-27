@@ -1,7 +1,7 @@
 import { Button, LineEdit, ListView, ProgressIndicator, ScrollView } from "std-widgets.slint";
 import { Palette as SystemPalette } from "std-widgets.slint";
 import { Theme, Space, Radius, Type, Motion } from "theme.slint";
-import { ActionButton, IconAction, Field, StatusPill, ChoiceRow, Separator, ButtonTone, StatusTone } from "components.slint";
+import { ActionButton, IconAction, Field, StatusPill, ChoiceRow, Separator, Dialog, Toggle, Disclosure, Note, ButtonTone, StatusTone } from "components.slint";
 
 // Re-exported so tests and the Rust side can switch the theme.
 export { Theme }
@@ -14,149 +14,6 @@ export struct PageItem {
     error: string,
 }
 
-
-component IconButton inherits Rectangle {
-    in property <string> icon;
-    in property <string> hint;
-    callback clicked;
-    width: 40px; height: 40px; border-radius: 12px;
-    background: touch.has-hover ? Theme.border : transparent;
-    border-width: key-focus.has-focus ? 2px : 0px; border-color: Theme.accent;
-    accessible-role: button;
-    accessible-label: hint;
-    Text { text: root.icon; color: Theme.text; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
-    key-focus := FocusScope {
-        x: 0; width: 0px; focus-on-tab-navigation: true;
-        key-pressed(event) => {
-            if (event.text == " " || event.text == "\n") { root.clicked(); return accept; }
-            return reject;
-        }
-    }
-    touch := TouchArea { clicked => { key-focus.focus(); root.clicked(); } }
-}
-
-component HeaderButton inherits Rectangle {
-    in property <string> label;
-    in property <string> hint: label;
-    callback clicked;
-    width: 68px; height: 40px; border-radius: 12px;
-    background: touch.has-hover ? Theme.border : transparent;
-    border-width: key-focus.has-focus ? 2px : 0px; border-color: Theme.accent;
-    accessible-role: button;
-    accessible-label: hint;
-    Text { text: root.label; color: Theme.text; font-size: 13px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
-    key-focus := FocusScope {
-        x: 0; width: 0px; focus-on-tab-navigation: true;
-        key-pressed(event) => {
-            if (event.text == " " || event.text == "\n") { root.clicked(); return accept; }
-            return reject;
-        }
-    }
-    touch := TouchArea { clicked => { key-focus.focus(); root.clicked(); } }
-}
-
-component PrimaryButton inherits Rectangle {
-    in property <string> label;
-    in property <bool> enabled: true;
-    callback clicked;
-    height: 42px; min-width: 120px; border-radius: 13px;
-    opacity: enabled ? 1 : 0.45;
-    background: touch.pressed ? #1746b5 : touch.has-hover ? Theme.accent-hover : Theme.accent;
-    border-width: key-focus.has-focus ? 2px : 0px; border-color: white;
-    accessible-role: button; accessible-label: label;
-    Text { text: root.label; color: white; font-weight: 700; font-size: 14px; horizontal-alignment: center; vertical-alignment: center; }
-    key-focus := FocusScope {
-        x: 0; width: 0px; enabled: root.enabled; focus-on-tab-navigation: true;
-        key-pressed(event) => {
-            if (event.text == " " || event.text == "\n") { root.clicked(); return accept; }
-            return reject;
-        }
-    }
-    touch := TouchArea { enabled: root.enabled; clicked => { key-focus.focus(); root.clicked(); } }
-}
-
-component IntentCard inherits Rectangle {
-    in property <string> icon;
-    in property <string> title;
-    in property <string> detail;
-    in property <string> action;
-    in property <bool> primary: false;
-    callback selected;
-    height: 76px; border-radius: 14px; background: touch.has-hover ? Theme.border : Theme.raised;
-    border-width: key-focus.has-focus ? 2px : 1px; border-color: key-focus.has-focus ? Theme.accent : Theme.border;
-    accessible-role: button; accessible-label: title + ". " + detail;
-    HorizontalLayout {
-        padding: 14px; spacing: 14px;
-        Rectangle {
-            width: 38px; height: 38px; border-radius: 12px; background: #2563eb18;
-            Text { text: root.icon; color: Theme.accent; font-size: 15px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
-        }
-        VerticalLayout {
-            alignment: center; spacing: 3px;
-            Text { text: root.title; color: Theme.text; font-size: 14px; font-weight: 600; }
-            Text { text: root.detail; color: Theme.text-secondary; font-size: 12px; }
-        }
-        Rectangle { horizontal-stretch: 1; }
-        Rectangle {
-            width: 98px; height: 36px; border-radius: 11px;
-            background: root.primary ? Theme.accent : Theme.border;
-            Text { text: root.action; color: root.primary ? white : Theme.text; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
-        }
-    }
-    key-focus := FocusScope {
-        x: 0; width: 0px; focus-on-tab-navigation: true;
-        key-pressed(event) => {
-            if (event.text == " " || event.text == "\n") { root.selected(); return accept; }
-            return reject;
-        }
-    }
-    touch := TouchArea { clicked => { key-focus.focus(); root.selected(); } }
-}
-
-component LevelButton inherits Rectangle {
-    in property <string> label;
-    in property <bool> selected;
-    callback clicked;
-    width: 88px; height: 34px; border-radius: 10px;
-    background: selected ? Theme.accent : touch.has-hover ? Theme.border : Theme.raised;
-    border-width: key-focus.has-focus ? 2px : 1px; border-color: selected || key-focus.has-focus ? Theme.accent : Theme.border;
-    accessible-role: button; accessible-label: label; accessible-checked: selected;
-    Text { text: root.label; color: selected ? white : Theme.text; font-size: 12px; font-weight: selected ? 700 : 500; horizontal-alignment: center; vertical-alignment: center; }
-    key-focus := FocusScope {
-        x: 0; width: 0px; focus-on-tab-navigation: true;
-        key-pressed(event) => {
-            if (event.text == " " || event.text == "\n") { root.clicked(); return accept; }
-            return reject;
-        }
-    }
-    touch := TouchArea { clicked => { key-focus.focus(); root.clicked(); } }
-}
-
-component ToggleOption inherits Rectangle {
-    in-out property <bool> checked: false;
-    in property <string> label;
-    height: 32px; background: transparent;
-    accessible-role: checkbox; accessible-label: label; accessible-checked: checked;
-    border-width: key-focus.has-focus ? 2px : 0px; border-color: Theme.accent; border-radius: 7px;
-    HorizontalLayout {
-        spacing: 10px; alignment: center;
-        Rectangle {
-            width: 18px; height: 18px; border-radius: 5px;
-            background: root.checked ? Theme.accent : Theme.raised;
-            border-width: 1px; border-color: root.checked ? Theme.accent : Theme.border;
-            Text { text: root.checked ? "✓" : ""; color: white; font-size: 12px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
-        }
-        Text { text: root.label; color: Theme.text; font-size: 12px; vertical-alignment: center; }
-    }
-    key-focus := FocusScope {
-        x: 0; width: 0px; focus-on-tab-navigation: true;
-        key-pressed(event) => {
-            if (event.text == " " || event.text == "\n") { root.checked = !root.checked; return accept; }
-            return reject;
-        }
-    }
-    TouchArea { clicked => { key-focus.focus(); root.checked = !root.checked; } }
-}
 
 export component AppWindow inherits Window {
     title: document-open ? document-title + " — Nitum PDF" : "Nitum PDF";
@@ -689,68 +546,143 @@ export component AppWindow inherits Window {
     }
     }
 
+    // Every dialog is sized by its own content and capped by the window, and
+    // every one of them carries at most one primary action, in the footer.
     if root.active-dialog > 0: Rectangle {
-        background: #00000066;
+        background: Theme.scrim;
         TouchArea { }
-        Rectangle {
-            width: min(parent.width - 32px, root.active-dialog == 1 ? 620px : root.active-dialog == 3 || root.active-dialog == 4 ? 480px : 640px);
-            height: root.active-dialog == 1 ? min(parent.height - 32px, 570px) : root.active-dialog == 2 ? min(parent.height - 32px, 650px) : root.active-dialog == 3 ? 390px : root.active-dialog == 4 ? 360px : min(parent.height - 32px, 560px);
-            x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
-            border-radius: 22px; background: Theme.surface; border-width: 1px; border-color: Theme.border;
-            drop-shadow-blur: 38px; drop-shadow-color: #00000055; drop-shadow-offset-y: 14px;
-            if root.active-dialog == 1: VerticalLayout {
-                padding: 24px; spacing: 14px;
-                HorizontalLayout {
-                    Text { text: "¿Qué necesitas hacer?"; color: Theme.text; font-size: 26px; font-weight: 700; }
-                    Rectangle { horizontal-stretch: 1; }
-                    IconButton { icon: "×"; hint: "Cerrar"; clicked => { root.close-dialog(); } }
+
+        if root.active-dialog == 1: Dialog {
+            title: "¿Qué necesitas hacer?";
+            subtitle: "Antes de cambiar el PDF te explicamos qué va a ocurrir.";
+            width: min(parent.width - 2 * Space.xl, 560px);
+            available-height: parent.height - 2 * Space.xl;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            closed => { root.close-dialog(); }
+            VerticalLayout {
+                spacing: Space.xs;
+                ChoiceRow {
+                    title: "Firmar con mi identidad";
+                    detail: "Archivo .p12 o .pfx, tarjeta o token criptográfico";
+                    icon: @image-url("../../data/icons/sign.svg");
+                    action: "Continuar";
+                    chosen => { root.choose-signing(); }
                 }
-                Text { text: "Elige según tu intención. Siempre explicaremos qué ocurrirá antes de cambiar el PDF."; color: Theme.text-secondary; font-size: 13px; }
-                IntentCard { icon: "ID"; title: "Firmar con mi identidad"; detail: "Archivo .p12/.pfx, tarjeta o token criptográfico"; action: "Continuar"; primary: true; selected => { root.choose-signing(); } }
-                IntentCard { icon: "✓"; title: "Comprobar firmas"; detail: "Integridad, titular y confianza del certificado"; action: "Comprobar"; selected => { root.verify-signatures(); } }
-                IntentCard { icon: "IMG"; title: "Mis firmas visuales"; detail: "Guarda y reutiliza tu rúbrica junto a datos verificables"; action: "Abrir"; selected => { root.appearance-return-dialog = 1; root.show-appearance-library(); } }
-                IntentCard { icon: "USB"; title: "Conectar tarjeta o DNI"; detail: "OpenSC, p11-kit y dispositivos PKCS#11"; action: "Buscar"; selected => { root.discover-tokens(); } }
+                ChoiceRow {
+                    title: "Comprobar las firmas del PDF";
+                    detail: "Integridad, titular y confianza del certificado";
+                    icon: @image-url("../../data/icons/shield-check.svg");
+                    action: "Comprobar";
+                    chosen => { root.verify-signatures(); }
+                }
+                ChoiceRow {
+                    title: "Mis firmas visuales";
+                    detail: "Guarda y reutiliza tu rúbrica junto a los datos verificables";
+                    icon: @image-url("../../data/icons/document.svg");
+                    action: "Abrir";
+                    chosen => { root.appearance-return-dialog = 1; root.show-appearance-library(); }
+                }
+                ChoiceRow {
+                    title: "Conectar tarjeta o DNI";
+                    detail: "OpenSC, p11-kit y dispositivos PKCS#11";
+                    icon: @image-url("../../data/icons/identity.svg");
+                    action: "Buscar";
+                    chosen => { root.discover-tokens(); }
+                }
             }
-            if root.active-dialog == 2: signing-scroll := ScrollView {
-              height: parent.height - 58px;
-              viewport-width: self.width;
-              VerticalLayout {
-                width: parent.width;
-                padding: 24px; spacing: 12px;
-                HorizontalLayout {
-                    Button { text: "Atrás"; clicked => { root.active-dialog = 1; } }
-                    Rectangle { horizontal-stretch: 1; }
-                    Text { text: "Confirmar firma"; color: Theme.text; font-weight: 700; vertical-alignment: center; }
-                    Rectangle { horizontal-stretch: 1; }
-                    PrimaryButton {
-                        label: root.signing-busy ? "Firmando…" : "Firmar y guardar";
-                        enabled: (root.identity-path != "" || root.identity-kind == 1) && !root.signing-busy;
-                        clicked => {
-                            root.sign-with-identity(secret-input.text, root.pades-level, root.certification-permission, reason-input.text, location-input.text, visible-input.checked);
-                            secret-input.text = "";
-                        }
-                    }
-                }
-                Text { text: "Elige tu identidad digital"; color: Theme.text; font-size: 18px; font-weight: 700; }
+        }
+
+        if root.active-dialog == 2: Dialog {
+            title: "Firmar el documento";
+            subtitle: "Se creará un PDF nuevo. El original no se modifica.";
+            show-back: true;
+            width: min(parent.width - 2 * Space.xl, 620px);
+            available-height: parent.height - 2 * Space.xl;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            primary-label: root.signing-busy ? "Firmando…" : "Firmar y guardar";
+            primary-icon: @image-url("../../data/icons/sign.svg");
+            primary-enabled: (root.identity-path != "" || root.identity-kind == 1) && !root.signing-busy;
+            back => { root.active-dialog = 1; }
+            closed => { root.placement-mode = false; root.close-dialog(); }
+            secondary-activated => { root.placement-mode = false; root.close-dialog(); }
+            primary-activated => {
+                root.sign-with-identity(secret-input.text, root.pades-level, root.certification-permission, reason-input.text, location-input.text, visible-input.checked);
+                secret-input.text = "";
+            }
+
+            Field {
+                label: "Identidad digital";
                 Rectangle {
-                    height: 86px; border-radius: 14px; background: Theme.raised; border-width: 1px; border-color: Theme.border;
+                    height: 64px;
+                    border-radius: Radius.md;
+                    background: Theme.raised;
+                    border-width: 1px;
+                    border-color: Theme.border;
                     HorizontalLayout {
-                        padding: 16px; spacing: 12px;
+                        padding-left: Space.md;
+                        padding-right: Space.sm;
+                        spacing: Space.md;
                         VerticalLayout {
-                            alignment: center; spacing: 4px;
-                            Text { text: root.identity-kind == 1 ? root.token-label : root.identity-name == "" ? "Archivo .p12 o .pfx" : root.identity-name; color: Theme.text; font-weight: 600; }
-                            Text { text: root.identity-kind == 1 ? "La clave privada nunca sale de la tarjeta" : root.identity-name == "" ? "Compatible con exportaciones de Adobe, Windows y autoridades certificadoras" : "La clave privada permanece en este equipo"; color: Theme.text-secondary; font-size: 11px; }
+                            alignment: center;
+                            Image {
+                                source: @image-url("../../data/icons/identity.svg");
+                                width: 20px; height: 20px;
+                                colorize: root.identity-path == "" && root.identity-kind != 1 ? Theme.text-tertiary : Theme.accent;
+                            }
                         }
-                        Rectangle { horizontal-stretch: 1; }
-                        Button { text: "Archivo"; clicked => { root.show-identity-library(); } }
-                        Button { text: "Tarjeta"; clicked => { root.discover-tokens(); } }
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 2px;
+                            horizontal-stretch: 1;
+                            Text {
+                                text: root.identity-kind == 1
+                                    ? root.token-label
+                                    : root.identity-name == "" ? "Sin identidad elegida" : root.identity-name;
+                                color: Theme.text;
+                                font-size: Type.body;
+                                font-weight: Type.semibold;
+                                overflow: elide;
+                            }
+                            Text {
+                                text: root.identity-kind == 1
+                                    ? "La clave privada nunca sale de la tarjeta"
+                                    : root.identity-name == ""
+                                        ? "Elige un archivo .p12 o .pfx, o una tarjeta"
+                                        : "La clave privada permanece en este equipo";
+                                color: Theme.text-secondary;
+                                font-size: Type.small;
+                                overflow: elide;
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            HorizontalLayout {
+                                spacing: Space.xs;
+                                ActionButton {
+                                    label: "Archivo";
+                                    tone: ButtonTone.secondary;
+                                    clicked => { root.show-identity-library(); }
+                                }
+                                ActionButton {
+                                    label: "Tarjeta";
+                                    tone: ButtonTone.secondary;
+                                    clicked => { root.discover-tokens(); }
+                                }
+                            }
+                        }
                     }
                 }
-                Text { text: root.identity-kind == 1 ? "PIN de la tarjeta" : "Contraseña de la identidad"; color: Theme.text; font-size: 13px; font-weight: 600; }
+            }
+
+            Field {
+                label: root.identity-kind == 1 ? "PIN de la tarjeta" : "Contraseña de la identidad";
+                help: "Se usa una sola vez para firmar y no se guarda en ningún sitio.";
                 secret-input := LineEdit {
                     enabled: (root.identity-path != "" || root.identity-kind == 1) && !root.signing-busy;
                     input-type: password;
-                    placeholder-text: "Se usa una vez y no se guarda";
+                    placeholder-text: root.identity-kind == 1 ? "PIN" : "Contraseña";
                     accessible-label: root.identity-kind == 1 ? "PIN de la tarjeta" : "Contraseña de la identidad digital";
                     accepted(value) => {
                         if (root.identity-path != "" || root.identity-kind == 1) && !root.signing-busy {
@@ -759,96 +691,202 @@ export component AppWindow inherits Window {
                         }
                     }
                 }
-                HorizontalLayout {
-                    spacing: 8px;
-                    Text { text: "Nivel PAdES"; color: Theme.text; font-size: 12px; vertical-alignment: center; }
-                    LevelButton { label: "B-B"; selected: root.pades-level == 0; clicked => { root.pades-level = 0; } }
-                    LevelButton { label: "B-T"; selected: root.pades-level == 1; clicked => { root.pades-level = 1; } }
-                    LevelButton { label: "B-LT"; selected: root.pades-level == 2; clicked => { root.pades-level = 2; } }
-                    LevelButton { label: "B-LTA"; selected: root.pades-level == 3; clicked => { root.pades-level = 3; } }
-                    Text {
-                        text: root.pades-level == 3 ? "Archivo" : root.pades-level == 2 ? "Validación duradera" : root.pades-level == 1 ? "Con sello de tiempo" : "Básica";
-                        color: Theme.text-secondary; font-size: 11px; vertical-alignment: center;
+            }
+
+            Field {
+                label: "Tipo de firma";
+                VerticalLayout {
+                    spacing: Space.xs;
+                    ChoiceRow {
+                        title: "Firmar para aprobar";
+                        detail: "Otras personas podrán firmar después de ti";
+                        option: true;
+                        is-selected: root.certification-permission == -1;
+                        chosen => { root.certification-permission = -1; }
+                    }
+                    ChoiceRow {
+                        title: "Certificar el documento";
+                        detail: "Debe ser la primera firma y fija qué cambios se permiten";
+                        option: true;
+                        is-selected: root.certification-permission != -1;
+                        chosen => { root.certification-permission = 2; }
                     }
                 }
-                HorizontalLayout {
-                    spacing: 8px;
-                    Text { text: "Uso"; color: Theme.text; font-size: 12px; vertical-alignment: center; }
-                    LevelButton { label: "Aprobación"; selected: root.certification-permission == -1; clicked => { root.certification-permission = -1; signing-scroll.viewport-y = 0px; } }
-                    LevelButton { label: "Certificar"; selected: root.certification-permission != -1; clicked => { root.certification-permission = 2; signing-scroll.viewport-y = 0px; } }
-                    Text { text: root.certification-permission == -1 ? "Permite firmas sucesivas" : "Debe ser la primera firma"; color: Theme.text-secondary; font-size: 11px; vertical-alignment: center; }
-                }
-                if root.certification-permission != -1: HorizontalLayout {
-                    spacing: 8px;
-                    Text { text: "Cambios permitidos"; color: Theme.text; font-size: 12px; vertical-alignment: center; }
-                    LevelButton { label: "Ninguno"; selected: root.certification-permission == 1; clicked => { root.certification-permission = 1; } }
-                    LevelButton { label: "Formularios"; selected: root.certification-permission == 2; clicked => { root.certification-permission = 2; } }
-                    LevelButton { label: "+ Anotaciones"; selected: root.certification-permission == 3; clicked => { root.certification-permission = 3; } }
-                }
-                HorizontalLayout {
-                    spacing: 10px;
-                    reason-input := LineEdit { placeholder-text: "Motivo (opcional)"; accessible-label: "Motivo de la firma, opcional"; }
-                    location-input := LineEdit { placeholder-text: "Ubicación (opcional)"; accessible-label: "Ubicación de la firma, opcional"; }
-                }
-                visible-input := ToggleOption { label: "Mostrar firma verificable en la página actual"; checked: true; }
-                HorizontalLayout {
-                    visible: visible-input.checked;
-                    spacing: 10px;
-                    Text {
-                        text: root.signature-position-set ? "Posición: página " + (root.signature-page + 1) : "Posición: esquina inferior izquierda";
-                        color: Theme.text-secondary; font-size: 11px; vertical-alignment: center;
+            }
+
+            if root.certification-permission != -1: Field {
+                label: "Cambios que seguirán permitidos";
+                VerticalLayout {
+                    spacing: Space.xs;
+                    ChoiceRow {
+                        title: "Ninguno";
+                        option: true;
+                        detail: "Cualquier cambio posterior invalida la certificación";
+                        is-selected: root.certification-permission == 1;
+                        chosen => { root.certification-permission = 1; }
                     }
-                    Rectangle { horizontal-stretch: 1; }
-                    Button {
-                        text: root.signature-position-set ? "Cambiar posición" : "Elegir posición";
+                    ChoiceRow {
+                        title: "Rellenar formularios";
+                        option: true;
+                        detail: "Se permite completar campos y firmar";
+                        is-selected: root.certification-permission == 2;
+                        chosen => { root.certification-permission = 2; }
+                    }
+                    ChoiceRow {
+                        title: "Formularios y anotaciones";
+                        option: true;
+                        detail: "Se permite además comentar y anotar";
+                        is-selected: root.certification-permission == 3;
+                        chosen => { root.certification-permission = 3; }
+                    }
+                }
+            }
+
+            Field {
+                label: "Firma visible";
+                visible-input := Toggle {
+                    label: "Mostrar la firma sobre la página";
+                    help: "La validez la aporta el certificado; lo visible sólo ayuda a reconocerla.";
+                    checked: true;
+                }
+            }
+
+            if visible-input.checked: VerticalLayout {
+                spacing: Space.sm;
+                HorizontalLayout {
+                    spacing: Space.sm;
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: root.signature-position-set
+                                ? "Posición: página " + (root.signature-page + 1)
+                                : "Posición: esquina inferior izquierda";
+                            color: Theme.text-secondary;
+                            font-size: Type.small;
+                        }
+                    }
+                    ActionButton {
+                        label: root.signature-position-set ? "Cambiar posición" : "Elegir posición";
+                        tone: ButtonTone.secondary;
                         clicked => {
                             root.placement-mode = true;
                             root.active-dialog = 0;
-                            root.viewer-status = "Selecciona una posición en el documento · Esc para cancelar";
+                            root.viewer-status = "Elige dónde mostrar la firma · Esc para cancelar";
                         }
                     }
                 }
                 HorizontalLayout {
-                    spacing: 10px;
-                    Text { text: root.appearance-name == "" ? "Apariencia: datos verificables" : "Apariencia: " + root.appearance-name; color: Theme.text-secondary; font-size: 11px; vertical-alignment: center; }
-                    Rectangle { horizontal-stretch: 1; }
-                    Button { text: "Guardadas"; clicked => { root.appearance-return-dialog = 2; root.show-appearance-library(); } }
-                    Button { text: "Añadir"; clicked => { root.select-appearance(); } }
+                    spacing: Space.sm;
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: root.appearance-name == ""
+                                ? "Apariencia: datos verificables"
+                                : "Apariencia: " + root.appearance-name;
+                            color: Theme.text-secondary;
+                            font-size: Type.small;
+                        }
+                    }
+                    ActionButton {
+                        label: "Guardadas";
+                        tone: ButtonTone.secondary;
+                        clicked => { root.appearance-return-dialog = 2; root.show-appearance-library(); }
+                    }
+                    ActionButton {
+                        label: "Añadir";
+                        tone: ButtonTone.secondary;
+                        clicked => { root.select-appearance(); }
+                    }
                 }
-                Text { text: "Se creará un PDF nuevo y el original no se modificará."; color: Theme.text-secondary; font-size: 12px; }
-                if root.signing-status != "": Rectangle {
-                    height: 56px; border-radius: 12px;
-                    background: root.signing-success ? #16a66a18 : #d92d2018;
-                    Text { text: root.signing-status; color: root.signing-success ? Theme.success : #d92d20; wrap: word-wrap; vertical-alignment: center; horizontal-alignment: center; }
-                }
-                Rectangle { height: 8px; }
-              }
             }
-            if root.active-dialog == 2: Rectangle {
-                y: parent.height - 58px; width: parent.width; height: 58px;
-                background: Theme.surface;
-                Rectangle { height: 1px; background: Theme.border; }
-                Button {
-                    x: 24px; y: 10px; width: parent.width - 48px;
-                    text: "Cancelar";
-                    clicked => { root.placement-mode = false; root.close-dialog(); }
+
+            Disclosure {
+                label: "Opciones avanzadas";
+                Field {
+                    label: "Validez a largo plazo";
+                    VerticalLayout {
+                        spacing: Space.xs;
+                        ChoiceRow {
+                            title: "Básica";
+                            option: true;
+                            detail: "Firma simple, sin sello de tiempo (PAdES B-B)";
+                            is-selected: root.pades-level == 0;
+                            chosen => { root.pades-level = 0; }
+                        }
+                        ChoiceRow {
+                            title: "Con sello de tiempo";
+                            option: true;
+                            detail: "Prueba cuándo se firmó (PAdES B-T)";
+                            is-selected: root.pades-level == 1;
+                            chosen => { root.pades-level = 1; }
+                        }
+                        ChoiceRow {
+                            title: "Validación duradera";
+                            option: true;
+                            detail: "Incluye la prueba de validez del certificado (PAdES B-LT)";
+                            is-selected: root.pades-level == 2;
+                            chosen => { root.pades-level = 2; }
+                        }
+                        ChoiceRow {
+                            title: "Archivo";
+                            option: true;
+                            detail: "Pensada para conservar el documento años (PAdES B-LTA)";
+                            is-selected: root.pades-level == 3;
+                            chosen => { root.pades-level = 3; }
+                        }
+                    }
+                }
+                Field {
+                    label: "Motivo";
+                    reason-input := LineEdit {
+                        placeholder-text: "Opcional";
+                        accessible-label: "Motivo de la firma, opcional";
+                    }
+                }
+                Field {
+                    label: "Ubicación";
+                    location-input := LineEdit {
+                        placeholder-text: "Opcional";
+                        accessible-label: "Ubicación de la firma, opcional";
+                    }
                 }
             }
-            if root.active-dialog == 3: VerticalLayout {
-                padding: 28px; spacing: 16px;
-                HorizontalLayout {
-                    Text { text: "PDF protegido"; color: Theme.text; font-size: 24px; font-weight: 700; }
-                    Rectangle { horizontal-stretch: 1; }
-                    IconButton { icon: "×"; hint: "Cancelar apertura"; clicked => { root.cancel-unlock(); } }
+
+            if root.signing-status != "": Note {
+                message: root.signing-status;
+                tone: root.signing-success ? StatusTone.positive : StatusTone.negative;
+                icon: root.signing-success
+                    ? @image-url("../../data/icons/shield-check.svg")
+                    : @image-url("../../data/icons/alert.svg");
+            }
+        }
+
+        if root.active-dialog == 3: Dialog {
+            title: "Este PDF está protegido";
+            subtitle: "Se usa una sola vez y nunca se guarda.";
+            width: min(parent.width - 2 * Space.xl, 460px);
+            available-height: parent.height - 2 * Space.xl;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            primary-label: root.unlock-busy ? "Abriendo…" : "Abrir PDF";
+            primary-enabled: !root.unlock-busy;
+            secondary-label: "Cancelar";
+            closed => { root.cancel-unlock(); }
+            secondary-activated => { root.cancel-unlock(); }
+            primary-activated => {
+                if unlock-input.text != "" {
+                    root.unlock-document(unlock-input.text);
+                    unlock-input.text = "";
                 }
-                Text {
-                    text: "Introduce la contraseña para abrirlo. Se usará una sola vez y nunca se guardará.";
-                    color: Theme.text-secondary; font-size: 13px; wrap: word-wrap;
-                }
+            }
+            Field {
+                label: "Contraseña del PDF";
                 unlock-input := LineEdit {
                     enabled: !root.unlock-busy;
                     input-type: password;
-                    placeholder-text: "Contraseña del PDF";
+                    placeholder-text: "Contraseña";
                     accessible-label: "Contraseña para abrir el PDF";
                     accepted(value) => {
                         if !root.unlock-busy && value != "" {
@@ -857,148 +895,168 @@ export component AppWindow inherits Window {
                         }
                     }
                 }
-                if root.unlock-status != "": Text {
-                    text: root.unlock-status; color: #d92d20; font-size: 12px; wrap: word-wrap;
-                }
-                Rectangle { vertical-stretch: 1; }
-                HorizontalLayout {
-                    alignment: end; spacing: 10px;
-                    Button { text: "Cancelar"; enabled: !root.unlock-busy; clicked => { root.cancel-unlock(); } }
-                    PrimaryButton {
-                        label: root.unlock-busy ? "Abriendo…" : "Abrir PDF";
-                        enabled: !root.unlock-busy;
-                        clicked => {
-                            if unlock-input.text != "" {
-                                root.unlock-document(unlock-input.text);
-                                unlock-input.text = "";
-                            }
-                        }
-                    }
+            }
+            if root.unlock-status != "": Note {
+                message: root.unlock-status;
+                tone: StatusTone.negative;
+                icon: @image-url("../../data/icons/alert.svg");
+            }
+        }
+
+        if root.active-dialog == 4: Dialog {
+            title: root.update-checking
+                ? "Buscando actualizaciones…"
+                : root.update-available
+                    ? "Nitum PDF " + root.update-version + " está disponible"
+                    : "Nitum PDF está actualizado";
+            subtitle: root.update-available
+                ? "Comprobamos su SHA-256 antes de instalarlo."
+                : "Versión instalada: " + root.current-version + ". La comprobación consulta únicamente los releases oficiales.";
+            width: min(parent.width - 2 * Space.xl, 480px);
+            available-height: parent.height - 2 * Space.xl;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            primary-label: root.update-available ? (root.update-busy ? "Actualizando…" : "Actualizar y reiniciar") : "";
+            primary-enabled: !root.update-busy && !root.update-checking;
+            secondary-label: root.update-available ? "Ahora no" : "";
+            closed => { root.close-dialog(); }
+            secondary-activated => { root.close-dialog(); }
+            primary-activated => { root.install-update(); }
+            if root.update-checking: ProgressIndicator {
+                indeterminate: true;
+                height: 3px;
+            }
+            if root.update-status != "": Note {
+                message: root.update-status;
+                tone: root.update-available ? StatusTone.caution : StatusTone.positive;
+                icon: root.update-available
+                    ? @image-url("../../data/icons/download.svg")
+                    : @image-url("../../data/icons/shield-check.svg");
+            }
+            if root.update-available && !root.update-busy: Text {
+                text: "Al terminar, Nitum se reiniciará y volverá a abrir este documento.";
+                color: Theme.text-secondary;
+                font-size: Type.small;
+                wrap: word-wrap;
+            }
+            if !root.update-available && !root.update-checking: ActionButton {
+                label: "Cerrar";
+                tone: ButtonTone.secondary;
+                clicked => { root.close-dialog(); }
+            }
+        }
+
+        if root.active-dialog == 5: Dialog {
+            title: "Comprobar las firmas";
+            subtitle: "Revisión local: integridad, cobertura y confianza por separado.";
+            show-back: true;
+            width: min(parent.width - 2 * Space.xl, 560px);
+            available-height: parent.height - 2 * Space.xl;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            primary-label: "Cerrar";
+            primary-tone: ButtonTone.secondary;
+            back => { root.active-dialog = 1; }
+            closed => { root.close-dialog(); }
+            primary-activated => { root.close-dialog(); }
+            if root.verification-busy: ProgressIndicator {
+                indeterminate: true;
+                height: 3px;
+            }
+            if root.verification-status != "": Note {
+                message: root.verification-status;
+                tone: root.verification-busy
+                    ? StatusTone.neutral
+                    : root.verification-success ? StatusTone.positive : StatusTone.negative;
+                icon: root.verification-busy
+                    ? @image-url("../../data/icons/search.svg")
+                    : root.verification-success
+                        ? @image-url("../../data/icons/shield-check.svg")
+                        : @image-url("../../data/icons/alert.svg");
+            }
+        }
+
+        if root.active-dialog == 6: Dialog {
+            title: "Tarjetas y tokens";
+            subtitle: root.token-status;
+            show-back: true;
+            width: min(parent.width - 2 * Space.xl, 520px);
+            available-height: parent.height - 2 * Space.xl;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            primary-label: "Elegir módulo PKCS#11";
+            primary-tone: ButtonTone.secondary;
+            back => { root.active-dialog = 1; }
+            closed => { root.close-dialog(); }
+            primary-activated => { root.select-token-module(); }
+            VerticalLayout {
+                spacing: Space.xs;
+                for option[index] in root.token-options: ChoiceRow {
+                    title: option;
+                    icon: @image-url("../../data/icons/identity.svg");
+                    action: "Usar";
+                    chosen => { root.choose-token(index); }
                 }
             }
-            if root.active-dialog == 4: VerticalLayout {
-                padding: 28px; spacing: 16px;
-                Text {
-                    text: root.update-checking ? "Buscando actualizaciones…" : root.update-available ? "Nitum PDF " + root.update-version + " está disponible" : "Nitum PDF está actualizado";
-                    color: Theme.text; font-size: 23px; font-weight: 700; wrap: word-wrap;
-                }
-                Text {
-                    text: root.update-available ? "Descargaremos el instalador oficial desde GitHub y comprobaremos su SHA-256 antes de abrir la autorización del sistema." : "Versión instalada: " + root.current-version + ". La comprobación consulta únicamente los releases oficiales de GitHub.";
-                    color: Theme.text-secondary; font-size: 13px; wrap: word-wrap;
-                }
-                Rectangle {
-                    height: 60px; border-radius: 12px; background: Theme.raised;
-                    if root.update-checking: ProgressIndicator { indeterminate: true; width: 180px; height: 3px; x: (parent.width - self.width) / 2; y: 12px; }
-                    Text { text: root.update-busy || root.update-checking || !root.update-available ? root.update-status : "Al terminar, Nitum se reiniciará y volverá a abrir este documento."; color: Theme.text; font-size: 12px; wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center; }
-                }
-                Rectangle { vertical-stretch: 1; }
-                HorizontalLayout {
-                    alignment: end; spacing: 10px;
-                    Button { text: root.update-available ? "Ahora no" : "Cerrar"; enabled: !root.update-busy && !root.update-checking; clicked => { root.close-dialog(); } }
-                    PrimaryButton { visible: root.update-available; label: root.update-busy ? "Actualizando…" : "Actualizar y reiniciar"; enabled: !root.update-busy && !root.update-checking; clicked => { root.install-update(); } }
+        }
+
+        if root.active-dialog == 7: Dialog {
+            title: "Firmas visuales guardadas";
+            subtitle: "La validez siempre proviene de tu certificado, no de la imagen.";
+            show-back: true;
+            width: min(parent.width - 2 * Space.xl, 520px);
+            available-height: parent.height - 2 * Space.xl;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            primary-label: "Añadir imagen";
+            back => { root.active-dialog = root.appearance-return-dialog; }
+            closed => { root.close-dialog(); }
+            secondary-activated => { root.close-dialog(); }
+            primary-activated => { root.select-appearance(); }
+            if root.appearance-options.length == 0: Text {
+                text: "Todavía no tienes firmas visuales guardadas.";
+                color: Theme.text-secondary;
+                font-size: Type.body;
+            }
+            VerticalLayout {
+                spacing: Space.xs;
+                for option[index] in root.appearance-options: ChoiceRow {
+                    title: option;
+                    icon: @image-url("../../data/icons/document.svg");
+                    action: "Usar";
+                    chosen => { root.choose-appearance(index); }
                 }
             }
-            if root.active-dialog == 5: VerticalLayout {
-                padding: 28px; spacing: 18px;
-                HorizontalLayout {
-                    Button { text: "Atrás"; clicked => { root.active-dialog = 1; } }
-                    Rectangle { horizontal-stretch: 1; }
-                    Text { text: "Comprobar firmas"; color: Theme.text; font-size: 20px; font-weight: 700; vertical-alignment: center; }
-                    Rectangle { horizontal-stretch: 1; }
-                    IconButton { icon: "×"; hint: "Cerrar"; clicked => { root.close-dialog(); } }
-                }
-                Text { text: "Revisamos el PDF localmente y separamos integridad, cobertura y confianza para no dar una falsa sensación de seguridad."; color: Theme.text-secondary; font-size: 13px; wrap: word-wrap; }
-                Rectangle {
-                    vertical-stretch: 1; border-radius: 16px;
-                    background: root.verification-busy ? Theme.raised : root.verification-success ? #16a66a18 : #d92d2018;
-                    VerticalLayout {
-                        padding: 22px; spacing: 12px; alignment: center;
-                        if root.verification-busy: ProgressIndicator { indeterminate: true; width: 180px; height: 3px; }
-                        Text { text: root.verification-status; color: root.verification-success ? Theme.success : root.verification-busy ? Theme.text : #d92d20; font-size: 14px; wrap: word-wrap; horizontal-alignment: center; }
-                    }
-                }
-                Button { text: "Cerrar"; clicked => { root.close-dialog(); } }
+        }
+
+        if root.active-dialog == 8: Dialog {
+            title: "Identidades digitales";
+            subtitle: "La contraseña se pide después y nunca se almacena.";
+            show-back: true;
+            width: min(parent.width - 2 * Space.xl, 520px);
+            available-height: parent.height - 2 * Space.xl;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            primary-label: "Importar .p12 o .pfx";
+            back => { root.active-dialog = 2; }
+            closed => { root.close-dialog(); }
+            secondary-activated => { root.close-dialog(); }
+            primary-activated => { root.select-identity(); }
+            if root.identity-options.length == 0: Text {
+                text: "Todavía no tienes identidades guardadas.";
+                color: Theme.text-secondary;
+                font-size: Type.body;
             }
-            if root.active-dialog == 6: VerticalLayout {
-                padding: 28px; spacing: 16px;
-                HorizontalLayout {
-                    Button { text: "Atrás"; clicked => { root.active-dialog = 1; } }
-                    Rectangle { horizontal-stretch: 1; }
-                    Text { text: "Tarjetas y tokens"; color: Theme.text; font-size: 21px; font-weight: 700; }
-                    Rectangle { horizontal-stretch: 1; }
-                    IconButton { icon: "×"; hint: "Cerrar"; clicked => { root.close-dialog(); } }
+            VerticalLayout {
+                spacing: Space.xs;
+                for option[index] in root.identity-options: ChoiceRow {
+                    title: option;
+                    icon: @image-url("../../data/icons/identity.svg");
+                    action: "Usar";
+                    chosen => { root.choose-identity(index); }
                 }
-                Text { text: root.token-status; color: Theme.text-secondary; font-size: 13px; wrap: word-wrap; }
-                VerticalLayout {
-                    spacing: 10px;
-                    for option[index] in root.token-options: Button {
-                        text: option;
-                        clicked => { root.choose-token(index); }
-                    }
-                }
-                Rectangle { vertical-stretch: 1; }
-                Button { text: "Elegir módulo PKCS#11 manualmente"; clicked => { root.select-token-module(); } }
-            }
-            if root.active-dialog == 7: VerticalLayout {
-                padding: 28px; spacing: 16px;
-                HorizontalLayout {
-                    Button { text: "Atrás"; clicked => { root.active-dialog = root.appearance-return-dialog; } }
-                    Rectangle { horizontal-stretch: 1; }
-                    Text { text: "Firmas visuales guardadas"; color: Theme.text; font-size: 20px; font-weight: 700; }
-                    Rectangle { horizontal-stretch: 1; }
-                    IconButton { icon: "×"; hint: "Cerrar"; clicked => { root.close-dialog(); } }
-                }
-                Text {
-                    text: "Elige una apariencia reutilizable. La validez siempre proviene de tu certificado, no de la imagen.";
-                    color: Theme.text-secondary; font-size: 13px; wrap: word-wrap;
-                }
-                if root.appearance-options.length == 0: Rectangle {
-                    vertical-stretch: 1; border-radius: 16px; background: Theme.raised;
-                    Text { text: "Todavía no tienes firmas visuales guardadas."; color: Theme.text-secondary; horizontal-alignment: center; vertical-alignment: center; }
-                }
-                if root.appearance-options.length > 0: ScrollView {
-                    vertical-stretch: 1;
-                    VerticalLayout {
-                        width: parent.width; spacing: 10px;
-                        for option[index] in root.appearance-options: Button {
-                            height: 56px; vertical-stretch: 0; text: option;
-                            clicked => { root.choose-appearance(index); }
-                        }
-                    }
-                }
-                PrimaryButton { label: "Añadir imagen"; clicked => { root.select-appearance(); } }
-                Button { text: "Cancelar"; clicked => { root.close-dialog(); } }
-            }
-            if root.active-dialog == 8: VerticalLayout {
-                padding: 28px; spacing: 16px;
-                HorizontalLayout {
-                    Button { text: "Atrás"; clicked => { root.active-dialog = 2; } }
-                    Rectangle { horizontal-stretch: 1; }
-                    Text { text: "Identidades digitales"; color: Theme.text; font-size: 20px; font-weight: 700; }
-                    Rectangle { horizontal-stretch: 1; }
-                    IconButton { icon: "×"; hint: "Cerrar"; clicked => { root.close-dialog(); } }
-                }
-                Text {
-                    text: "Elige una identidad .p12 o .pfx guardada. La contraseña se solicitará después y nunca se almacenará.";
-                    color: Theme.text-secondary; font-size: 13px; wrap: word-wrap;
-                }
-                if root.identity-options.length == 0: Rectangle {
-                    vertical-stretch: 1; border-radius: 16px; background: Theme.raised;
-                    Text { text: "Todavía no tienes identidades guardadas."; color: Theme.text-secondary; horizontal-alignment: center; vertical-alignment: center; }
-                }
-                if root.identity-options.length > 0: ScrollView {
-                    vertical-stretch: 1;
-                    VerticalLayout {
-                        width: parent.width; spacing: 10px;
-                        for option[index] in root.identity-options: Button {
-                            height: 56px; vertical-stretch: 0; text: option;
-                            clicked => { root.choose-identity(index); }
-                        }
-                    }
-                }
-                PrimaryButton { label: "Importar .p12 o .pfx"; clicked => { root.select-identity(); } }
-                Button { text: "Cancelar"; clicked => { root.close-dialog(); } }
             }
         }
     }
+
 }
