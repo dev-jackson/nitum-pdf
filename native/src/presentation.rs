@@ -194,6 +194,16 @@ fn invalidate_other_page_renders(ui: &AppWindow, keep: usize) {
     }
 }
 
+/// Width, in logical pixels, that a page is rasterised at. The window owns the
+/// value because zoom 100 % means "as wide as the window allows"; if the window
+/// is gone the fallback only has to be sane, never exact.
+fn render_base_width(weak: &Weak<AppWindow>) -> f32 {
+    weak.upgrade()
+        .map(|ui| ui.get_page_base_width())
+        .filter(|width| *width >= 320.0)
+        .unwrap_or(760.0)
+}
+
 fn spawn_render(
     document: ActiveDocument,
     generation: Arc<AtomicU64>,
@@ -203,6 +213,7 @@ fn spawn_render(
     navigate: bool,
 ) {
     let token = generation.load(Ordering::SeqCst);
+    let base_width = render_base_width(&weak);
     if navigate && let Some(ui) = weak.upgrade() {
         ui.set_document_loading(true);
         ui.set_document_error("".into());
@@ -219,7 +230,7 @@ fn spawn_render(
                 anyhow::bail!("La página solicitada no existe.");
             }
             let size = pdf.page_size(page_index)?;
-            let display_width = (760.0 * zoom_percent as f32 / 100.0).min(4096.0);
+            let display_width = (base_width * zoom_percent as f32 / 100.0).min(4096.0);
             let scale = (display_width / size.width_points.max(1.0)).clamp(0.1, 8.0);
             pdf.render_page(page_index, scale)
         })();
@@ -270,6 +281,7 @@ fn spawn_render(
 
 fn spawn_open(context: OpenContext, path: PathBuf, password: Option<zeroize::Zeroizing<String>>) {
     let token = context.generation.fetch_add(1, Ordering::SeqCst) + 1;
+    let base_width = render_base_width(&context.weak);
     if let Some(ui) = context.weak.upgrade() {
         ui.set_document_loading(true);
         ui.set_document_error("".into());
@@ -292,7 +304,7 @@ fn spawn_open(context: OpenContext, path: PathBuf, password: Option<zeroize::Zer
                     })
                     .collect::<Result<Vec<_>>>()?;
                 let size = pdf.page_size(0)?;
-                let scale = (760.0 / size.width_points.max(1.0)).clamp(0.1, 8.0);
+                let scale = (base_width / size.width_points.max(1.0)).clamp(0.1, 8.0);
                 let bitmap = pdf.render_page(0, scale)?;
                 if context.generation.load(Ordering::SeqCst) == token {
                     *context
@@ -646,6 +658,7 @@ pub fn run<P: DocumentPicker + 'static>(
         let generation = Arc::clone(&search_generation);
         let viewer = Arc::clone(&viewer_for_search);
         let weak = weak.clone();
+        let base_width = render_base_width(&weak);
         if let Some(ui) = weak.upgrade() {
             ui.set_search_status("Buscando…".into())
         }
@@ -664,7 +677,7 @@ pub fn run<P: DocumentPicker + 'static>(
                         let size = pdf.page_size(page)?;
                         Some(pdf.render_page(
                             page,
-                            (760.0 / size.width_points.max(1.0)).clamp(0.1, 8.0),
+                            (base_width / size.width_points.max(1.0)).clamp(0.1, 8.0),
                         )?)
                     } else {
                         None

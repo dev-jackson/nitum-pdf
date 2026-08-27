@@ -1,0 +1,274 @@
+import { Theme, Space, Radius, Type, Motion } from "theme.slint";
+
+// Shared primitives. A screen assembles these; it does not invent its own
+// paddings, radii or focus treatments.
+
+export enum ButtonTone { primary, secondary, ghost, danger }
+
+export component ActionButton inherits Rectangle {
+    in property <string> label;
+    in property <image> icon;
+    in property <ButtonTone> tone: ButtonTone.secondary;
+    in property <bool> enabled: true;
+    in property <bool> wide: false;
+    callback clicked;
+
+    height: 36px;
+    min-width: wide ? 0px : 96px;
+    horizontal-stretch: wide ? 1 : 0;
+    border-radius: Radius.md;
+    opacity: enabled ? 1.0 : 0.4;
+
+    property <bool> filled: tone == ButtonTone.primary || tone == ButtonTone.danger;
+    property <color> base: tone == ButtonTone.primary ? Theme.accent
+        : tone == ButtonTone.danger ? Theme.danger
+        : tone == ButtonTone.ghost ? transparent
+        : Theme.raised;
+    property <color> hovered: tone == ButtonTone.primary ? Theme.accent-hover
+        : tone == ButtonTone.danger ? Theme.danger
+        : Theme.accent-soft;
+    property <color> ink: filled ? Theme.text-on-accent : Theme.text;
+
+    background: !enabled ? base : touch.pressed ? (tone == ButtonTone.primary ? Theme.accent-pressed : hovered)
+        : touch.has-hover ? hovered : base;
+    border-width: focus.has-focus ? 2px : filled ? 0px : 1px;
+    border-color: focus.has-focus ? (filled ? Theme.text-on-accent : Theme.focus-ring)
+        : tone == ButtonTone.ghost ? transparent : Theme.border;
+    animate background { duration: Motion.instant; }
+
+    accessible-role: button;
+    accessible-label: label;
+    accessible-enabled: enabled;
+
+    HorizontalLayout {
+        padding-left: Space.md;
+        padding-right: Space.md;
+        spacing: Space.sm;
+        alignment: center;
+        if root.icon.width > 0: Image {
+            source: root.icon;
+            width: 16px;
+            height: 16px;
+            colorize: root.ink;
+            vertical-alignment: center;
+        }
+        Text {
+            text: root.label;
+            color: root.ink;
+            font-size: Type.body;
+            font-weight: root.filled ? Type.semibold : Type.medium;
+            vertical-alignment: center;
+        }
+    }
+
+    focus := FocusScope {
+        x: 0; width: 0px;
+        enabled: root.enabled;
+        focus-on-tab-navigation: true;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") { root.clicked(); return accept; }
+            return reject;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { focus.focus(); root.clicked(); }
+    }
+}
+
+export component IconAction inherits Rectangle {
+    in property <image> icon;
+    in property <string> hint;
+    in property <bool> enabled: true;
+    in property <bool> active: false;
+    callback clicked;
+
+    width: 36px;
+    height: 36px;
+    border-radius: Radius.md;
+    opacity: enabled ? 1.0 : 0.35;
+    background: active ? Theme.accent-soft
+        : touch.pressed ? Theme.border
+        : touch.has-hover ? Theme.accent-soft
+        : transparent;
+    border-width: focus.has-focus ? 2px : 0px;
+    border-color: Theme.focus-ring;
+    animate background { duration: Motion.instant; }
+
+    accessible-role: button;
+    accessible-label: hint;
+    accessible-enabled: enabled;
+
+    Image {
+        source: root.icon;
+        width: 18px;
+        height: 18px;
+        colorize: root.active ? Theme.accent : Theme.text-secondary;
+    }
+
+    focus := FocusScope {
+        x: 0; width: 0px;
+        enabled: root.enabled;
+        focus-on-tab-navigation: true;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") { root.clicked(); return accept; }
+            return reject;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { focus.focus(); root.clicked(); }
+    }
+}
+
+// A labelled field. The label sits above the control, always, so the eye scans
+// one column instead of hunting for which label belongs to which input.
+export component Field inherits VerticalLayout {
+    in property <string> label;
+    in property <string> help;
+    spacing: Space.xs;
+    Text {
+        text: root.label;
+        color: Theme.text-secondary;
+        font-size: Type.small;
+        font-weight: Type.medium;
+    }
+    @children
+    if root.help != "": Text {
+        text: root.help;
+        color: Theme.text-tertiary;
+        font-size: Type.caption;
+        wrap: word-wrap;
+    }
+}
+
+// Status that never depends on colour alone: icon, then word, then tint.
+export enum StatusTone { neutral, positive, caution, negative }
+
+export component StatusPill inherits Rectangle {
+    in property <string> label;
+    in property <StatusTone> tone: StatusTone.neutral;
+    in property <image> icon;
+
+    height: 24px;
+    border-radius: Radius.pill;
+    background: tone == StatusTone.positive ? Theme.success-soft
+        : tone == StatusTone.caution ? Theme.warning-soft
+        : tone == StatusTone.negative ? Theme.danger-soft
+        : Theme.accent-soft;
+
+    property <color> ink: tone == StatusTone.positive ? Theme.success
+        : tone == StatusTone.caution ? Theme.warning
+        : tone == StatusTone.negative ? Theme.danger
+        : Theme.accent;
+
+    accessible-role: text;
+    accessible-label: label;
+
+    HorizontalLayout {
+        padding-left: Space.sm;
+        padding-right: Space.sm;
+        spacing: Space.xs;
+        alignment: center;
+        if root.icon.width > 0: Image {
+            source: root.icon;
+            width: 13px;
+            height: 13px;
+            colorize: root.ink;
+            vertical-alignment: center;
+        }
+        Text {
+            text: root.label;
+            color: root.ink;
+            font-size: Type.caption;
+            font-weight: Type.semibold;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// A row in a list of things to choose from. Hierarchy comes from weight and
+// space; the only border is the hairline that separates one row from the next.
+export component ChoiceRow inherits Rectangle {
+    in property <string> title;
+    in property <string> detail;
+    in property <image> icon;
+    in property <bool> selected: false;
+    in property <string> action;
+    callback chosen;
+
+    height: 56px;
+    border-radius: Radius.md;
+    background: selected ? Theme.accent-soft
+        : touch.has-hover ? Theme.accent-soft
+        : transparent;
+    border-width: focus.has-focus ? 2px : 0px;
+    border-color: Theme.focus-ring;
+    animate background { duration: Motion.instant; }
+
+    accessible-role: button;
+    accessible-label: title + ". " + detail;
+    accessible-checked: selected;
+
+    HorizontalLayout {
+        padding-left: Space.md;
+        padding-right: Space.md;
+        spacing: Space.md;
+        alignment: start;
+
+        if root.icon.width > 0: Image {
+            source: root.icon;
+            width: 20px;
+            height: 20px;
+            colorize: root.selected ? Theme.accent : Theme.text-secondary;
+            vertical-alignment: center;
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: Type.body;
+                font-weight: Type.semibold;
+                overflow: elide;
+            }
+            if root.detail != "": Text {
+                text: root.detail;
+                color: Theme.text-secondary;
+                font-size: Type.small;
+                overflow: elide;
+            }
+        }
+
+        if root.action != "": Text {
+            text: root.action;
+            color: Theme.accent;
+            font-size: Type.small;
+            font-weight: Type.semibold;
+            vertical-alignment: center;
+        }
+    }
+
+    focus := FocusScope {
+        x: 0; width: 0px;
+        focus-on-tab-navigation: true;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") { root.chosen(); return accept; }
+            return reject;
+        }
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { focus.focus(); root.chosen(); }
+    }
+}
+
+export component Separator inherits Rectangle {
+    height: 1px;
+    background: Theme.border;
+}
