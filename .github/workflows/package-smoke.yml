@@ -26,8 +26,13 @@ jobs:
       - name: Build and inspect Debian package
         run: |
           packaging/native/build-linux-deb.sh 0.0.0
-          package=$(find dist -maxdepth 1 -name '*.deb' -print -quit)
-          test -n "$package"
+          packaging/native/create-linux-release-assets.sh 0.0.0 x86_64
+          package=dist/nitum-pdf-0.0.0-linux-x86_64.deb
+          test -f "$package"
+          test -f dist/nitum-pdf_0.0.0_amd64.deb
+          cmp "$package" dist/nitum-pdf_0.0.0_amd64.deb
+          (cd dist && sha256sum -c nitum-pdf-0.0.0-linux-x86_64.deb.sha256)
+          (cd dist && sha256sum -c nitum-pdf_0.0.0_amd64.deb.sha256)
           dpkg-deb --info "$package"
           dpkg-deb --contents "$package" | tee "$RUNNER_TEMP/deb-contents.txt"
           grep -q './usr/lib/nitum-pdf/nitum-pdf' "$RUNNER_TEMP/deb-contents.txt"

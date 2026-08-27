@@ -1,4 +1,4 @@
-name: Native multiplatform release
+name: Native Linux release
 on:
   push:
     tags: ["v*"]
@@ -37,8 +37,8 @@ jobs:
       - run: rustup update stable && rustup default stable
       - name: Build native Debian package
         run: packaging/native/build-linux-deb.sh "${GITHUB_REF_NAME#v}"
-      - name: Create checksum
-        run: cd dist && sha256sum ./*.deb > "nitum-pdf-${GITHUB_REF_NAME#v}-linux-${{ matrix.arch }}.deb.sha256"
+      - name: Add legacy updater alias and checksums
+        run: packaging/native/create-linux-release-assets.sh "${GITHUB_REF_NAME#v}" "${{ matrix.arch }}"
       - name: Attest Linux artifacts
         uses: actions/attest@v4
         with:
@@ -48,113 +48,8 @@ jobs:
           name: release-linux-${{ matrix.arch }}
           path: dist/*
 
-  macos:
-    needs: validate-version
-    strategy:
-      matrix:
-        include:
-          - runner: macos-15-intel
-            arch: x86_64
-          - runner: macos-15
-            arch: aarch64
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v5
-      - run: rustup update stable && rustup default stable
-      - name: Import Apple signing certificate
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.NITUM_APPLE_CERTIFICATE_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.NITUM_APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_CERTIFICATE_PASSWORD" ]; then
-            echo 'A public release requires the Apple signing certificate and its password.' >&2
-            exit 1
-          fi
-          security create-keychain -p "$RUNNER_TEMP" nitum-build.keychain
-          security default-keychain -s nitum-build.keychain
-          security unlock-keychain -p "$RUNNER_TEMP" nitum-build.keychain
-          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/nitum-signing.p12"
-          security import "$RUNNER_TEMP/nitum-signing.p12" -k nitum-build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productsign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$RUNNER_TEMP" nitum-build.keychain
-      - name: Build native macOS package
-        env:
-          NITUM_APPLE_SIGN_IDENTITY: ${{ secrets.NITUM_APPLE_SIGN_IDENTITY }}
-          NITUM_APPLE_INSTALLER_IDENTITY: ${{ secrets.NITUM_APPLE_INSTALLER_IDENTITY }}
-          NITUM_APPLE_ID: ${{ secrets.NITUM_APPLE_ID }}
-          NITUM_APPLE_TEAM_ID: ${{ secrets.NITUM_APPLE_TEAM_ID }}
-          NITUM_APPLE_APP_PASSWORD: ${{ secrets.NITUM_APPLE_APP_PASSWORD }}
-        run: |
-          for required in NITUM_APPLE_SIGN_IDENTITY NITUM_APPLE_INSTALLER_IDENTITY NITUM_APPLE_ID NITUM_APPLE_TEAM_ID NITUM_APPLE_APP_PASSWORD; do
-            if [ -z "${!required}" ]; then
-              echo "A public release requires $required." >&2
-              exit 1
-            fi
-          done
-          packaging/native/build-macos-pkg.sh "${GITHUB_REF_NAME#v}"
-      - name: Verify signed and notarized macOS package
-        run: |
-          pkgutil --check-signature dist/*.pkg
-          spctl --assess --type install --verbose=2 dist/*.pkg
-          xcrun stapler validate dist/*.pkg
-      - name: Reject developer-machine dynamic dependencies
-        run: |
-          if otool -L native/target/release/nitum-pdf | grep -E '/opt/homebrew|/usr/local|libssl|libcrypto'; then
-            echo 'The app contains a non-portable dynamic dependency.' >&2
-            exit 1
-          fi
-      - name: Reject metadata and legacy files in macOS payload
-        run: |
-          payload=$(pkgutil --payload-files dist/*.pkg)
-          if printf '%s\n' "$payload" | grep -E '(^|/)\._|\.py([co])?$|pyproject\.toml|requirements.*\.txt'; then
-            echo 'The macOS package contains metadata or legacy Python files.' >&2
-            exit 1
-          fi
-      - name: Create checksum
-        run: cd dist && shasum -a 256 ./*.pkg > "nitum-pdf-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}.pkg.sha256"
-      - name: Attest macOS artifacts
-        uses: actions/attest@v4
-        with:
-          subject-path: dist/*
-      - uses: actions/upload-artifact@v7
-        with:
-          name: release-macos-${{ matrix.arch }}
-          path: dist/*
-
-  windows:
-    needs: validate-version
-    runs-on: windows-2025
-    steps:
-      - uses: actions/checkout@v5
-      - run: rustup update stable; rustup default stable
-      - run: choco install innosetup --no-progress -y
-      - name: Build native Windows installer
-        shell: pwsh
-        env:
-          NITUM_WINDOWS_CERTIFICATE_BASE64: ${{ secrets.NITUM_WINDOWS_CERTIFICATE_BASE64 }}
-          NITUM_WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.NITUM_WINDOWS_CERTIFICATE_PASSWORD }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:NITUM_WINDOWS_CERTIFICATE_BASE64) -or
-              [string]::IsNullOrWhiteSpace($env:NITUM_WINDOWS_CERTIFICATE_PASSWORD)) {
-            throw "A public release requires the Windows Authenticode certificate and password."
-          }
-          packaging/native/build-windows.ps1 -Version $env:GITHUB_REF_NAME.TrimStart('v')
-      - name: Create checksum
-        shell: pwsh
-        run: |
-          $asset = Get-ChildItem dist\*.exe | Select-Object -First 1
-          $hash = (Get-FileHash $asset.FullName -Algorithm SHA256).Hash.ToLower()
-          "$hash  $($asset.Name)" | Set-Content "$($asset.FullName).sha256"
-      - name: Attest Windows artifacts
-        uses: actions/attest@v4
-        with:
-          subject-path: dist/*
-      - uses: actions/upload-artifact@v7
-        with:
-          name: release-windows-x86_64
-          path: dist/*
-
   publish:
-    needs: [linux, macos, windows]
+    needs: linux
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v8
