@@ -104,6 +104,14 @@ export component AppWindow inherits Window {
     private property <float> placement-x: 0.5;
     private property <float> placement-y: 0.5;
     private property <int> placement-page: -1;
+    // Acrobat asks you to drag a box for the signature area. A plain click still
+    // works and drops the default size at that point.
+    private property <bool> placement-dragging: false;
+    private property <float> placement-start-x: 0;
+    private property <float> placement-start-y: 0;
+    in-out property <bool> signature-area-set: false;
+    in-out property <float> signature-x2: 0;
+    in-out property <float> signature-y2: 0;
     in-out property <int> signature-page: 0;
     in-out property <float> signature-x: 0;
     in-out property <float> signature-y: 0;
@@ -412,16 +420,27 @@ export component AppWindow inherits Window {
                                 border-width: 2px;
                                 border-color: Theme.accent;
 
-                                // What you see is the box that gets written:
-                                // real size, centred on the pointer, clamped to
-                                // the page exactly as the placement maths does.
+                                // While dragging, the box is the rectangle being
+                                // drawn; otherwise it is the default size centred
+                                // on the pointer. Either way it is the box that
+                                // gets written into the PDF.
                                 if root.placement-page == index: Rectangle {
-                                    x: clamp(root.placement-x - root.signature-box-width / 2,
-                                             0, 1 - root.signature-box-width) * parent.width;
-                                    y: clamp(root.placement-y - root.signature-box-height / 2,
-                                             0, 1 - root.signature-box-height) * parent.height;
-                                    width: root.signature-box-width * parent.width;
-                                    height: root.signature-box-height * parent.height;
+                                    property <float> left-fraction: root.placement-dragging
+                                        ? min(root.placement-start-x, root.placement-x)
+                                        : clamp(root.placement-x - root.signature-box-width / 2,
+                                                0, 1 - root.signature-box-width);
+                                    property <float> top-fraction: root.placement-dragging
+                                        ? min(root.placement-start-y, root.placement-y)
+                                        : clamp(root.placement-y - root.signature-box-height / 2,
+                                                0, 1 - root.signature-box-height);
+                                    x: self.left-fraction * parent.width;
+                                    y: self.top-fraction * parent.height;
+                                    width: (root.placement-dragging
+                                        ? abs(root.placement-x - root.placement-start-x)
+                                        : root.signature-box-width) * parent.width;
+                                    height: (root.placement-dragging
+                                        ? abs(root.placement-y - root.placement-start-y)
+                                        : root.signature-box-height) * parent.height;
                                     border-radius: Radius.sm;
                                     border-width: 2px;
                                     border-color: Theme.accent;
@@ -429,31 +448,49 @@ export component AppWindow inherits Window {
                                     VerticalLayout {
                                         alignment: center;
                                         Text {
-                                            text: "Tu firma irá aquí";
+                                            text: root.placement-dragging
+                                                ? "Suelta para fijar el área"
+                                                : "Tu firma irá aquí";
                                             color: Theme.accent;
                                             font-size: Type.small;
                                             font-weight: Type.semibold;
                                             horizontal-alignment: center;
+                                            overflow: elide;
                                         }
                                     }
                                 }
 
                                 place := TouchArea {
                                     mouse-cursor: crosshair;
-                                    moved => {
-                                        root.placement-page = index;
-                                        root.placement-x = place.mouse-x / parent.width;
-                                        root.placement-y = place.mouse-y / parent.height;
-                                    }
-                                    clicked => {
-                                        root.signature-page = index;
-                                        root.signature-x = place.mouse-x / parent.width;
-                                        root.signature-y = place.mouse-y / parent.height;
-                                        root.signature-position-set = true;
-                                        root.placement-mode = false;
-                                        root.placement-page = -1;
-                                        root.viewer-status = "Firma colocada en la página " + (index + 1);
-                                        root.active-dialog = 2;
+                                    pointer-event(event) => {
+                                        if (event.kind == PointerEventKind.down) {
+                                            root.placement-page = index;
+                                            root.placement-start-x = place.mouse-x / parent.width;
+                                            root.placement-start-y = place.mouse-y / parent.height;
+                                            root.placement-x = root.placement-start-x;
+                                            root.placement-y = root.placement-start-y;
+                                            root.placement-dragging = true;
+                                        } else if (event.kind == PointerEventKind.move) {
+                                            root.placement-page = index;
+                                            root.placement-x = place.mouse-x / parent.width;
+                                            root.placement-y = place.mouse-y / parent.height;
+                                        } else if (event.kind == PointerEventKind.up
+                                                   && root.placement-dragging) {
+                                            root.placement-x = place.mouse-x / parent.width;
+                                            root.placement-y = place.mouse-y / parent.height;
+                                            root.placement-dragging = false;
+                                            root.signature-page = index;
+                                            root.signature-x = root.placement-start-x;
+                                            root.signature-y = root.placement-start-y;
+                                            root.signature-x2 = root.placement-x;
+                                            root.signature-y2 = root.placement-y;
+                                            root.signature-area-set = true;
+                                            root.signature-position-set = true;
+                                            root.placement-mode = false;
+                                            root.placement-page = -1;
+                                            root.viewer-status = "Área de la firma fijada en la página " + (index + 1);
+                                            root.active-dialog = 2;
+                                        }
                                     }
                                 }
                             }
@@ -695,7 +732,7 @@ export component AppWindow inherits Window {
                         alignment: center;
                         Text {
                             text: root.placement-mode
-                                ? "Haz clic en el punto donde quieres la firma"
+                                ? "Arrastra para dibujar el área de la firma, o haz clic para el tamaño estándar"
                                 : "Arrastra sobre el texto que quieres copiar";
                             color: Theme.text;
                             font-size: Type.body;
@@ -933,12 +970,14 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     spacing: Space.xs;
                     ChoiceRow {
-                        title: root.signature-position-set
-                            ? "En la página " + (root.signature-page + 1) + ", donde la colocaste"
-                            : "Esquina inferior izquierda de esta página";
+                        title: root.signature-area-set
+                            ? "Área dibujada en la página " + (root.signature-page + 1)
+                            : root.signature-position-set
+                                ? "En la página " + (root.signature-page + 1) + ", donde la colocaste"
+                                : "Esquina inferior izquierda de esta página";
                         detail: root.signature-position-set
-                            ? "Pulsa para colocarla en otro sitio"
-                            : "Pulsa para elegir el punto exacto sobre el documento";
+                            ? "Pulsa para dibujar otra área sobre el documento"
+                            : "Pulsa y arrastra sobre el documento para dibujar el área de la firma";
                         icon: @image-url("../../data/icons/sign.svg");
                         action: root.signature-position-set ? "Cambiar" : "Elegir";
                         chosen => {

@@ -88,14 +88,29 @@ fn every_platform_uses_the_same_icon_artwork() {
     ))
     .expect("the macOS build script is in packaging/native");
     assert!(
-        macos.contains("data/com.nitum.Pdf.svg"),
-        "the macOS bundle must be built from the same artwork Linux installs; it \
-         used to rasterise data/nitum-family-mark.png, so macOS showed a blue \
-         wordmark that has nothing to do with the application icon"
+        macos.contains("data/com.nitum.Pdf.png"),
+        "the macOS bundle must be built from the application icon; it used to \
+         rasterise data/nitum-family-mark.png, so macOS showed a blue wordmark \
+         that has nothing to do with the product"
     );
     assert!(
         !macos.contains("nitum-family-mark"),
         "the family wordmark is not the application icon"
+    );
+
+    // macOS runners have `sips` but not `rsvg-convert`, so the master the bundle
+    // downscales from is a committed PNG rendered from the same SVG Linux ships.
+    let master = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../data/com.nitum.Pdf.png"
+    ))
+    .expect("the 1024 px master of the application icon ships in data/");
+    let width = u32::from_be_bytes(master[16..20].try_into().expect("PNG header"));
+    let height = u32::from_be_bytes(master[20..24].try_into().expect("PNG header"));
+    assert_eq!(
+        (width, height),
+        (1024, 1024),
+        "the master has to be large enough for the 512@2x entry of the iconset"
     );
 
     let plist = std::fs::read_to_string(concat!(

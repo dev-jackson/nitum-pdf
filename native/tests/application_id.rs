@@ -12,24 +12,23 @@
 
 use nitum_pdf::presentation::APPLICATION_ID;
 
+/// Both halves live in one test because the order is the whole point, and
+/// because selecting a backend is a one-way change to the process state that a
+/// second test could otherwise observe out of order.
 #[test]
-fn setting_the_id_before_a_backend_exists_fails() {
-    // This is the trap: without a backend there is no global context to write
-    // into, so the call reports NoPlatform rather than doing anything.
-    let result = slint::set_xdg_app_id(APPLICATION_ID);
+fn the_id_only_applies_once_a_backend_has_been_selected() {
+    // The trap: with no backend there is no context to write into, so the call
+    // reports NoPlatform instead of doing anything. This is what the old code
+    // did on every launch, and it dropped the error.
     assert!(
-        result.is_err(),
-        "set_xdg_app_id is expected to fail with no backend selected; if this \
+        slint::set_xdg_app_id(APPLICATION_ID).is_err(),
+        "set_xdg_app_id is expected to fail while no backend is selected; if it \
          ever starts succeeding, the ordering guard in announce_application_id \
-         is no longer needed"
+         is no longer load-bearing and this test should be revisited"
     );
-}
 
-#[test]
-fn setting_the_id_after_selecting_a_backend_succeeds() {
-    // Each integration test binary is its own process, so this one gets a fresh
-    // context and can select a backend without the test above interfering.
     i_slint_backend_testing::init_no_event_loop();
+
     slint::set_xdg_app_id(APPLICATION_ID)
         .expect("with a backend selected the application id must actually be applied");
 }

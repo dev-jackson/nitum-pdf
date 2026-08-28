@@ -1153,11 +1153,21 @@ pub fn run<P: DocumentPicker + 'static>(
             let appearance = PathBuf::from(ui.get_appearance_path().to_string());
             let identity_kind = ui.get_identity_kind();
             let page_index = ui.get_current_page().saturating_sub(1) as u32;
+            // Acrobat's model: a dragged rectangle defines the area, and a plain
+            // click drops the default size at that point.
             let requested_position = ui.get_signature_position_set().then(|| {
                 (
                     ui.get_signature_page().max(0) as u32,
-                    ui.get_signature_x().clamp(0.0, 1.0),
-                    ui.get_signature_y().clamp(0.0, 1.0),
+                    (
+                        ui.get_signature_x().clamp(0.0, 1.0),
+                        ui.get_signature_y().clamp(0.0, 1.0),
+                    ),
+                    ui.get_signature_area_set().then(|| {
+                        (
+                            ui.get_signature_x2().clamp(0.0, 1.0),
+                            ui.get_signature_y2().clamp(0.0, 1.0),
+                        )
+                    }),
                 )
             });
             if source.as_os_str().is_empty()
@@ -1235,13 +1245,19 @@ pub fn run<P: DocumentPicker + 'static>(
                             width: SIGNATURE_WIDTH_POINTS.min(dimensions.width_points.max(1.0)),
                             height: SIGNATURE_HEIGHT_POINTS.min(dimensions.height_points.max(1.0)),
                         },
-                        |(_, x, y)| {
-                            SignaturePlacement::from_normalized_point(
+                        |(_, start, end)| match end {
+                            Some(end) => SignaturePlacement::from_normalized_rect(
                                 selected_page,
                                 dimensions,
-                                x,
-                                y,
-                            )
+                                start,
+                                end,
+                            ),
+                            None => SignaturePlacement::from_normalized_point(
+                                selected_page,
+                                dimensions,
+                                start.0,
+                                start.1,
+                            ),
                         },
                     ),
                 )
