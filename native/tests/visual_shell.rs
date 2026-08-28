@@ -181,8 +181,16 @@ fn light_dark_and_signature_center_render_headlessly() {
     save_if_requested("identity-library-dark.png", &identity_library);
 
     ui.set_active_dialog(0);
+    // Moving an existing placement: the preview shows the box at its current
+    // spot, at the real size it will have in the PDF.
+    ui.set_signature_box_width(0.36);
+    ui.set_signature_box_height(0.07);
+    ui.set_signature_page(0);
+    ui.set_signature_x(0.42);
+    ui.set_signature_y(0.38);
+    ui.set_signature_position_set(true);
     ui.set_placement_mode(true);
-    ui.set_viewer_status("Selecciona una posición en el documento · Esc para cancelar".into());
+    ui.set_viewer_status("".into());
     let placement = ui.window().take_snapshot().unwrap();
     assert_ne!(document.as_bytes(), placement.as_bytes());
     save_if_requested("signature-placement-dark.png", &placement);

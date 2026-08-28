@@ -91,6 +91,15 @@ export component AppWindow inherits Window {
     private property <float> selection-current-x: 0;
     private property <float> selection-current-y: 0;
     in-out property <bool> signature-position-set: false;
+    // Size of the visible signature as a fraction of the page, so the preview
+    // drawn while placing it is the size that ends up in the PDF.
+    in-out property <float> signature-box-width: 0.32;
+    in-out property <float> signature-box-height: 0.09;
+    in-out property <float> signature-default-x: 0.2;
+    in-out property <float> signature-default-y: 0.9;
+    private property <float> placement-x: 0.5;
+    private property <float> placement-y: 0.5;
+    private property <int> placement-page: -1;
     in-out property <int> signature-page: 0;
     in-out property <float> signature-x: 0;
     in-out property <float> signature-y: 0;
@@ -128,6 +137,19 @@ export component AppWindow inherits Window {
     callback choose-token(int);
     callback request-page(int);
     callback visible-page(int);
+    changed placement-mode => {
+        if (root.placement-mode) {
+            root.placement-page = root.signature-position-set
+                ? root.signature-page
+                : max(0, root.current-page - 1);
+            root.placement-x = root.signature-position-set
+                ? root.signature-x
+                : root.signature-default-x;
+            root.placement-y = root.signature-position-set
+                ? root.signature-y
+                : root.signature-default-y;
+        }
+    }
     changed scroll-page => {
         root.pages-scroll-y = 0px - root.scroll-page * (root.page-base-width * 1.414 * root.zoom-percent / 100 + Space.xxl);
     }
@@ -346,15 +368,48 @@ export component AppWindow inherits Window {
                                 background: transparent;
                                 border-width: 2px;
                                 border-color: Theme.accent;
+
+                                // What you see is the box that gets written:
+                                // real size, centred on the pointer, clamped to
+                                // the page exactly as the placement maths does.
+                                if root.placement-page == index: Rectangle {
+                                    x: clamp(root.placement-x - root.signature-box-width / 2,
+                                             0, 1 - root.signature-box-width) * parent.width;
+                                    y: clamp(root.placement-y - root.signature-box-height / 2,
+                                             0, 1 - root.signature-box-height) * parent.height;
+                                    width: root.signature-box-width * parent.width;
+                                    height: root.signature-box-height * parent.height;
+                                    border-radius: Radius.sm;
+                                    border-width: 2px;
+                                    border-color: Theme.accent;
+                                    background: Theme.accent-soft;
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Text {
+                                            text: "Tu firma irá aquí";
+                                            color: Theme.accent;
+                                            font-size: Type.small;
+                                            font-weight: Type.semibold;
+                                            horizontal-alignment: center;
+                                        }
+                                    }
+                                }
+
                                 place := TouchArea {
                                     mouse-cursor: crosshair;
+                                    moved => {
+                                        root.placement-page = index;
+                                        root.placement-x = place.mouse-x / parent.width;
+                                        root.placement-y = place.mouse-y / parent.height;
+                                    }
                                     clicked => {
                                         root.signature-page = index;
                                         root.signature-x = place.mouse-x / parent.width;
                                         root.signature-y = place.mouse-y / parent.height;
                                         root.signature-position-set = true;
                                         root.placement-mode = false;
-                                        root.viewer-status = "Posición elegida en la página " + (index + 1);
+                                        root.placement-page = -1;
+                                        root.viewer-status = "Firma colocada en la página " + (index + 1);
                                         root.active-dialog = 2;
                                     }
                                 }
@@ -830,53 +885,33 @@ export component AppWindow inherits Window {
                 }
             }
 
-            if visible-input.checked: VerticalLayout {
-                spacing: Space.sm;
-                HorizontalLayout {
-                    spacing: Space.sm;
-                    VerticalLayout {
-                        alignment: center;
-                        horizontal-stretch: 1;
-                        Text {
-                            text: root.signature-position-set
-                                ? "Posición: página " + (root.signature-page + 1)
-                                : "Posición: esquina inferior izquierda";
-                            color: Theme.text-secondary;
-                            font-size: Type.small;
-                        }
-                    }
-                    ActionButton {
-                        label: root.signature-position-set ? "Cambiar posición" : "Elegir posición";
-                        tone: ButtonTone.secondary;
-                        clicked => {
+            if visible-input.checked: Field {
+                label: "Dónde va la firma";
+                VerticalLayout {
+                    spacing: Space.xs;
+                    ChoiceRow {
+                        title: root.signature-position-set
+                            ? "En la página " + (root.signature-page + 1) + ", donde la colocaste"
+                            : "Esquina inferior izquierda de esta página";
+                        detail: root.signature-position-set
+                            ? "Pulsa para colocarla en otro sitio"
+                            : "Pulsa para elegir el punto exacto sobre el documento";
+                        icon: @image-url("../../data/icons/sign.svg");
+                        action: root.signature-position-set ? "Cambiar" : "Elegir";
+                        chosen => {
                             root.placement-mode = true;
                             root.active-dialog = 0;
-                            root.viewer-status = "Elige dónde mostrar la firma · Esc para cancelar";
+                            root.viewer-status = "";
                         }
                     }
-                }
-                HorizontalLayout {
-                    spacing: Space.sm;
-                    VerticalLayout {
-                        alignment: center;
-                        horizontal-stretch: 1;
-                        Text {
-                            text: root.appearance-name == ""
-                                ? "Apariencia: datos verificables"
-                                : "Apariencia: " + root.appearance-name;
-                            color: Theme.text-secondary;
-                            font-size: Type.small;
-                        }
-                    }
-                    ActionButton {
-                        label: "Guardadas";
-                        tone: ButtonTone.secondary;
-                        clicked => { root.appearance-return-dialog = 2; root.show-appearance-library(); }
-                    }
-                    ActionButton {
-                        label: "Añadir";
-                        tone: ButtonTone.secondary;
-                        clicked => { root.select-appearance(); }
+                    ChoiceRow {
+                        title: root.appearance-name == ""
+                            ? "Apariencia: datos verificables"
+                            : "Apariencia: " + root.appearance-name;
+                        detail: "Nombre, fecha y motivo, con tu imagen si eliges una";
+                        icon: @image-url("../../data/icons/document.svg");
+                        action: "Cambiar";
+                        chosen => { root.appearance-return-dialog = 2; root.show-appearance-library(); }
                     }
                 }
             }

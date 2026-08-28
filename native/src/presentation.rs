@@ -7,7 +7,8 @@ use crate::{
     },
     domain::{
         AppRelease, CertificationPermission, HardwareToken, PadesLevel, PageBitmap,
-        PdfPasswordRequired, SignatureAppearance, SignaturePlacement, SigningIdentity,
+        PdfPasswordRequired, SIGNATURE_DEFAULT_MARGIN_POINTS, SIGNATURE_HEIGHT_POINTS,
+        SIGNATURE_WIDTH_POINTS, SignatureAppearance, SignaturePlacement, SigningIdentity,
     },
 };
 use anyhow::Result;
@@ -319,6 +320,18 @@ fn spawn_open(context: OpenContext, path: PathBuf, password: Option<zeroize::Zer
                     })
                     .collect::<Result<Vec<_>>>()?;
                 let size = pdf.page_size(0)?;
+                let signature_fraction = (
+                    (SIGNATURE_WIDTH_POINTS / size.width_points.max(1.0)).clamp(0.02, 1.0),
+                    (SIGNATURE_HEIGHT_POINTS / size.height_points.max(1.0)).clamp(0.02, 1.0),
+                    // Centre of the default corner placement, so the preview can
+                    // show where the signature lands before anything is chosen.
+                    ((SIGNATURE_DEFAULT_MARGIN_POINTS + SIGNATURE_WIDTH_POINTS / 2.0)
+                        / size.width_points.max(1.0))
+                    .clamp(0.0, 1.0),
+                    (1.0 - (SIGNATURE_DEFAULT_MARGIN_POINTS + SIGNATURE_HEIGHT_POINTS / 2.0)
+                        / size.height_points.max(1.0))
+                    .clamp(0.0, 1.0),
+                );
                 let scale = (base_width / size.width_points.max(1.0)).clamp(0.1, 8.0);
                 let bitmap = pdf.render_page(0, scale)?;
                 if context.generation.load(Ordering::SeqCst) == token {
@@ -333,7 +346,7 @@ fn spawn_open(context: OpenContext, path: PathBuf, password: Option<zeroize::Zer
                         .map_err(|_| anyhow::anyhow!("estado del visor bloqueado"))?
                         .opened(page_count);
                 }
-                Ok((page_count, bitmap, aspects))
+                Ok((page_count, bitmap, aspects, signature_fraction))
             });
         let _ = slint::invoke_from_event_loop(move || {
             if context.generation.load(Ordering::SeqCst) != token {
@@ -345,13 +358,17 @@ fn spawn_open(context: OpenContext, path: PathBuf, password: Option<zeroize::Zer
             ui.set_document_loading(false);
             ui.set_unlock_busy(false);
             match loaded {
-                Ok((page_count, bitmap, aspects)) => {
+                Ok((page_count, bitmap, aspects, signature_fraction)) => {
                     if let Ok(mut pending) = context.pending_document.lock() {
                         *pending = None;
                     }
                     let (image, aspect) = page_image(bitmap);
                     ui.set_page_image(image.clone());
                     ui.set_page_aspect(aspect);
+                    ui.set_signature_box_width(signature_fraction.0);
+                    ui.set_signature_box_height(signature_fraction.1);
+                    ui.set_signature_default_x(signature_fraction.2);
+                    ui.set_signature_default_y(signature_fraction.3);
                     ui.set_page_count(page_count.min(i32::MAX as u32) as i32);
                     ui.set_scroll_page(0);
                     let pages = aspects
@@ -1167,18 +1184,27 @@ pub fn run<P: DocumentPicker + 'static>(
                     ui.set_signing_status("No se pudo calcular la posición de la firma.".into());
                     return;
                 };
-                Some(requested_position.map_or(
-                    SignaturePlacement {
-                        page_index: selected_page,
-                        left: 36.0_f32.min((dimensions.width_points - 220.0).max(0.0)),
-                        bottom: 36.0_f32.min((dimensions.height_points - 72.0).max(0.0)),
-                        width: 220.0_f32.min(dimensions.width_points.max(1.0)),
-                        height: 72.0_f32.min(dimensions.height_points.max(1.0)),
-                    },
-                    |(_, x, y)| {
-                        SignaturePlacement::from_normalized_point(selected_page, dimensions, x, y)
-                    },
-                ))
+                Some(
+                    requested_position.map_or(
+                        SignaturePlacement {
+                            page_index: selected_page,
+                            left: SIGNATURE_DEFAULT_MARGIN_POINTS
+                                .min((dimensions.width_points - SIGNATURE_WIDTH_POINTS).max(0.0)),
+                            bottom: SIGNATURE_DEFAULT_MARGIN_POINTS
+                                .min((dimensions.height_points - SIGNATURE_HEIGHT_POINTS).max(0.0)),
+                            width: SIGNATURE_WIDTH_POINTS.min(dimensions.width_points.max(1.0)),
+                            height: SIGNATURE_HEIGHT_POINTS.min(dimensions.height_points.max(1.0)),
+                        },
+                        |(_, x, y)| {
+                            SignaturePlacement::from_normalized_point(
+                                selected_page,
+                                dimensions,
+                                x,
+                                y,
+                            )
+                        },
+                    ),
+                )
             } else {
                 None
             };

@@ -74,13 +74,20 @@ pub struct SignaturePlacement {
 }
 
 impl SignaturePlacement {
+    /// Places the signature box **centred** on the given point, expressed as a
+    /// fraction of the page with the origin at its top-left corner.
+    ///
+    /// The point is the centre and not a corner because the person picks a spot
+    /// by pointing at it: anchoring the corner there made the signature land
+    /// down and to the right of the place they aimed at, by half its own size.
+    /// The box is then clamped so it always stays inside the page.
     pub fn from_normalized_point(page_index: u32, page: PageSize, x: f32, y_from_top: f32) -> Self {
-        let width = 220.0_f32.min(page.width_points.max(1.0));
-        let height = 72.0_f32.min(page.height_points.max(1.0));
-        let left = (x.clamp(0.0, 1.0) * page.width_points)
+        let width = SIGNATURE_WIDTH_POINTS.min(page.width_points.max(1.0));
+        let height = SIGNATURE_HEIGHT_POINTS.min(page.height_points.max(1.0));
+        let left = (x.clamp(0.0, 1.0) * page.width_points - width / 2.0)
             .clamp(0.0, (page.width_points - width).max(0.0));
         let bottom =
-            (page.height_points - y_from_top.clamp(0.0, 1.0) * page.height_points - height)
+            (page.height_points - y_from_top.clamp(0.0, 1.0) * page.height_points - height / 2.0)
                 .clamp(0.0, (page.height_points - height).max(0.0));
         Self {
             page_index,
@@ -91,6 +98,14 @@ impl SignaturePlacement {
         }
     }
 }
+
+/// Size of a visible signature, in PDF points. The preview drawn over the page
+/// and the box written into the document both read these, so what you see when
+/// you place it is the size you get.
+pub const SIGNATURE_WIDTH_POINTS: f32 = 220.0;
+pub const SIGNATURE_HEIGHT_POINTS: f32 = 72.0;
+/// Margin from the page corner when nobody picks a spot.
+pub const SIGNATURE_DEFAULT_MARGIN_POINTS: f32 = 36.0;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SignatureReport {
@@ -173,6 +188,7 @@ mod tests {
             height_points: 800.0,
             rotation_degrees: 0,
         };
+        // Aiming at the far corner keeps the whole box on the page.
         let bottom_right = SignaturePlacement::from_normalized_point(2, page, 1.0, 1.0);
         assert_eq!(bottom_right.page_index, 2);
         assert_eq!(bottom_right.left, 380.0);
@@ -183,5 +199,25 @@ mod tests {
         let top_left = SignaturePlacement::from_normalized_point(0, page, -1.0, -1.0);
         assert_eq!(top_left.left, 0.0);
         assert_eq!(top_left.bottom, 728.0);
+    }
+
+    #[test]
+    fn visible_signature_is_centred_on_the_point_you_choose() {
+        let page = PageSize {
+            width_points: 600.0,
+            height_points: 800.0,
+            rotation_degrees: 0,
+        };
+        // The middle of the page puts the middle of the box there: the centre
+        // sits at (300, 400) whichever way the axes run.
+        let middle = SignaturePlacement::from_normalized_point(0, page, 0.5, 0.5);
+        assert_eq!(middle.left + middle.width / 2.0, 300.0);
+        assert_eq!(middle.bottom + middle.height / 2.0, 400.0);
+
+        // A quarter down from the top is 200 points from the top, so the centre
+        // sits 600 points up from the bottom.
+        let upper = SignaturePlacement::from_normalized_point(0, page, 0.25, 0.25);
+        assert_eq!(upper.left + upper.width / 2.0, 150.0);
+        assert_eq!(upper.bottom + upper.height / 2.0, 600.0);
     }
 }
