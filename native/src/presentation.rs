@@ -1,5 +1,5 @@
 use crate::{
-    AppWindow, PageItem,
+    AppWindow, PageItem, VerificationCheck,
     application::{
         AppearanceStore, DocumentPicker, HardwareSignRequest, HardwareTokenProvider, IdentityStore,
         OpenDocument, OpenPdf, PdfEngine, PdfSigning, SignRequest, TextClipboard, UpdateInstaller,
@@ -140,6 +140,21 @@ fn spawn_token_scan(
     });
 }
 
+/// Verdicts a verification row can carry, mirrored in `VerificationCheck.tone`.
+const TONE_NEUTRAL: i32 = 0;
+const TONE_OK: i32 = 1;
+const TONE_WARNING: i32 = 2;
+const TONE_FAILED: i32 = 3;
+
+/// "1 firma" and "2 firmas" rather than the "firma(s)" the interface used to show.
+fn describe_count(count: usize, singular: &str, plural: &str) -> String {
+    if count == 1 {
+        format!("1 {singular}")
+    } else {
+        format!("{count} {plural}")
+    }
+}
+
 fn page_image(bitmap: PageBitmap) -> (Image, f32) {
     let aspect = bitmap.height as f32 / bitmap.width.max(1) as f32;
     let pixels = SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(
@@ -194,6 +209,16 @@ fn invalidate_other_page_renders(ui: &AppWindow, keep: usize) {
     }
 }
 
+/// Width, in logical pixels, that a page is rasterised at. The window owns the
+/// value because zoom 100 % means "as wide as the window allows"; if the window
+/// is gone the fallback only has to be sane, never exact.
+fn render_base_width(weak: &Weak<AppWindow>) -> f32 {
+    weak.upgrade()
+        .map(|ui| ui.get_page_base_width())
+        .filter(|width| *width >= 320.0)
+        .unwrap_or(760.0)
+}
+
 fn spawn_render(
     document: ActiveDocument,
     generation: Arc<AtomicU64>,
@@ -203,6 +228,7 @@ fn spawn_render(
     navigate: bool,
 ) {
     let token = generation.load(Ordering::SeqCst);
+    let base_width = render_base_width(&weak);
     if navigate && let Some(ui) = weak.upgrade() {
         ui.set_document_loading(true);
         ui.set_document_error("".into());
@@ -219,7 +245,7 @@ fn spawn_render(
                 anyhow::bail!("La página solicitada no existe.");
             }
             let size = pdf.page_size(page_index)?;
-            let display_width = (760.0 * zoom_percent as f32 / 100.0).min(4096.0);
+            let display_width = (base_width * zoom_percent as f32 / 100.0).min(4096.0);
             let scale = (display_width / size.width_points.max(1.0)).clamp(0.1, 8.0);
             pdf.render_page(page_index, scale)
         })();
@@ -270,6 +296,7 @@ fn spawn_render(
 
 fn spawn_open(context: OpenContext, path: PathBuf, password: Option<zeroize::Zeroizing<String>>) {
     let token = context.generation.fetch_add(1, Ordering::SeqCst) + 1;
+    let base_width = render_base_width(&context.weak);
     if let Some(ui) = context.weak.upgrade() {
         ui.set_document_loading(true);
         ui.set_document_error("".into());
@@ -292,7 +319,7 @@ fn spawn_open(context: OpenContext, path: PathBuf, password: Option<zeroize::Zer
                     })
                     .collect::<Result<Vec<_>>>()?;
                 let size = pdf.page_size(0)?;
-                let scale = (760.0 / size.width_points.max(1.0)).clamp(0.1, 8.0);
+                let scale = (base_width / size.width_points.max(1.0)).clamp(0.1, 8.0);
                 let bitmap = pdf.render_page(0, scale)?;
                 if context.generation.load(Ordering::SeqCst) == token {
                     *context
@@ -377,6 +404,10 @@ pub fn run<P: DocumentPicker + 'static>(
         update_service,
         update_installer,
     } = services;
+    // Wayland and X11 match a window to its desktop entry through the XDG application id,
+    // so without this the shell has no way to find com.nitum.Pdf.desktop and shows no icon.
+    // It only applies to those platforms; elsewhere the call is inert.
+    let _ = slint::set_xdg_app_id("com.nitum.Pdf");
     let ui = AppWindow::new()?;
     let active_document: ActiveDocument = Arc::new(Mutex::new(None));
     let pending_document: PendingDocument = Arc::new(Mutex::new(None));
@@ -642,6 +673,7 @@ pub fn run<P: DocumentPicker + 'static>(
         let generation = Arc::clone(&search_generation);
         let viewer = Arc::clone(&viewer_for_search);
         let weak = weak.clone();
+        let base_width = render_base_width(&weak);
         if let Some(ui) = weak.upgrade() {
             ui.set_search_status("Buscando…".into())
         }
@@ -655,16 +687,15 @@ pub fn run<P: DocumentPicker + 'static>(
                     .ok_or_else(|| anyhow::anyhow!("No hay un PDF abierto."))?;
                 let hits = pdf.search(&query, 500)?;
                 let first_page = hits.first().map(|hit| hit.page_index);
-                let bitmap =
-                    if let Some(page) = first_page {
-                        let size = pdf.page_size(page)?;
-                        Some(pdf.render_page(
-                            page,
-                            (760.0 / size.width_points.max(1.0)).clamp(0.1, 8.0),
-                        )?)
-                    } else {
-                        None
-                    };
+                let bitmap = if let Some(page) = first_page {
+                    let size = pdf.page_size(page)?;
+                    Some(pdf.render_page(
+                        page,
+                        (base_width / size.width_points.max(1.0)).clamp(0.1, 8.0),
+                    )?)
+                } else {
+                    None
+                };
                 Ok::<_, anyhow::Error>((hits.len(), first_page, bitmap))
             })();
             let _ = slint::invoke_from_event_loop(move || {
@@ -1263,8 +1294,13 @@ pub fn run<P: DocumentPicker + 'static>(
                 ui.set_verification_busy(false);
                 match result {
                     Ok(reports) if reports.is_empty() => {
+                        // Not signed is a fact about the document, not a fault.
                         ui.set_verification_success(false);
-                        ui.set_verification_status("Este PDF no contiene firmas digitales.".into());
+                        ui.set_verification_failed(false);
+                        ui.set_verification_checks(ModelRc::default());
+                        ui.set_verification_status(
+                            "Este PDF no contiene ninguna firma digital.".into(),
+                        );
                     }
                     Ok(reports) => {
                         let count = reports
@@ -1321,19 +1357,97 @@ pub fn run<P: DocumentPicker + 'static>(
                         } else {
                             format!("Certificación DocMDP: {certifications}")
                         };
-                        ui.set_verification_success(intact);
-                        ui.set_verification_status(
-                            format!(
-                                "{count} firma(s), {timestamps} sello(s) de tiempo: {}. Nivel(es): {levels}. {certification_summary}. Firmante(s): {names}. Confianza del certificado: {}. Cobertura completa: {}.",
-                                if intact { "integridad válida" } else { "integridad dañada" },
-                                if trusted { "confirmada" } else { "no confirmada" },
-                                if covered { "sí" } else { "no" },
+                        // One row per question a reader actually has, each
+                        // with its own verdict. Folding these into a single
+                        // sentence hid the important case: a document can be
+                        // perfectly intact and still be signed by a certificate
+                        // nobody has vouched for.
+                        let mut checks: Vec<VerificationCheck> = Vec::new();
+                        checks.push(VerificationCheck {
+                            tone: if intact { TONE_OK } else { TONE_FAILED },
+                            label: if intact {
+                                "El documento no se ha alterado".into()
+                            } else {
+                                "El documento se modificó después de firmarse".into()
+                            },
+                            detail: if intact {
+                                "El contenido coincide exactamente con lo que se firmó.".into()
+                            } else {
+                                "La comprobación criptográfica no cuadra: no te fíes de este PDF."
+                                    .into()
+                            },
+                        });
+                        checks.push(VerificationCheck {
+                            tone: if covered { TONE_OK } else { TONE_WARNING },
+                            label: if covered {
+                                "La firma cubre todo el documento".into()
+                            } else {
+                                "La firma sólo cubre una parte".into()
+                            },
+                            detail: if covered {
+                                "No hay páginas ni cambios fuera de lo firmado.".into()
+                            } else {
+                                "Se añadió contenido después de firmar; esa parte no está respaldada."
+                                    .into()
+                            },
+                        });
+                        checks.push(VerificationCheck {
+                            tone: if trusted { TONE_OK } else { TONE_WARNING },
+                            label: if trusted {
+                                "El certificado es de confianza".into()
+                            } else {
+                                "No podemos confirmar quién emitió el certificado".into()
+                            },
+                            detail: if trusted {
+                                "La cadena llega hasta una autoridad reconocida por este equipo."
+                                    .into()
+                            } else {
+                                "La firma es válida, pero nadie en este equipo avala la identidad del firmante."
+                                    .into()
+                            },
+                        });
+                        checks.push(VerificationCheck {
+                            tone: TONE_NEUTRAL,
+                            label: if names.is_empty() {
+                                "Sin firmante identificado".into()
+                            } else {
+                                format!("Firmado por {names}").into()
+                            },
+                            detail: format!(
+                                "{}{}. {certification_summary}.",
+                                describe_count(count, "firma", "firmas"),
+                                if timestamps == 0 {
+                                    String::new()
+                                } else {
+                                    format!(
+                                        ", {}",
+                                        describe_count(
+                                            timestamps,
+                                            "sello de tiempo",
+                                            "sellos de tiempo"
+                                        )
+                                    )
+                                },
                             )
                             .into(),
-                        );
+                        });
+                        if !levels.is_empty() {
+                            checks.push(VerificationCheck {
+                                tone: TONE_NEUTRAL,
+                                label: "Nivel de la firma".into(),
+                                detail: levels.as_str().into(),
+                            });
+                        }
+
+                        ui.set_verification_success(intact);
+                        ui.set_verification_failed(false);
+                        ui.set_verification_status("".into());
+                        ui.set_verification_checks(ModelRc::new(Rc::new(VecModel::from(checks))));
                     }
                     Err(error) => {
                         ui.set_verification_success(false);
+                        ui.set_verification_failed(true);
+                        ui.set_verification_checks(ModelRc::default());
                         ui.set_verification_status(error.to_string().into());
                     }
                 }

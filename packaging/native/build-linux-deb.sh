@@ -23,8 +23,8 @@ sed -e "s/@VERSION@/$version/g" -e "s/@DEB_ARCH@/$deb_arch/g" \
 install -m 0755 "$project_dir/native/target/release/nitum-pdf" "$stage/usr/lib/nitum-pdf/nitum-pdf"
 install -m 0644 "$project_dir/native/target/release/libpdfium.so" "$stage/usr/lib/nitum-pdf/libpdfium.so"
 ln -s ../lib/nitum-pdf/nitum-pdf "$stage/usr/bin/nitum-pdf"
-install -m 0644 "$project_dir/data/org.pwview.PdfViewer.desktop" "$stage/usr/share/applications/com.nitum.Pdf.desktop"
-install -m 0644 "$project_dir/data/org.pwview.PdfViewer.svg" "$stage/usr/share/icons/hicolor/scalable/apps/com.nitum.Pdf.svg"
+install -m 0644 "$project_dir/data/com.nitum.Pdf.desktop" "$stage/usr/share/applications/com.nitum.Pdf.desktop"
+install -m 0644 "$project_dir/data/com.nitum.Pdf.svg" "$stage/usr/share/icons/hicolor/scalable/apps/com.nitum.Pdf.svg"
 
 mkdir -p "$project_dir/dist"
 dpkg-deb --root-owner-group --build "$stage" "$project_dir/dist/nitum-pdf-$version-linux-$release_arch.deb"

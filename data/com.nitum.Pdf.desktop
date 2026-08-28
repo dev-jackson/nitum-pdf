@@ -6,5 +6,6 @@ Exec=nitum-pdf %f
 Icon=com.nitum.Pdf
 Terminal=false
 Categories=Office;Viewer;
+Keywords=PDF;firma;firmar;certificado;documento;
 MimeType=application/pdf;
 StartupWMClass=nitum-pdf

@@ -1,0 +1,89 @@
+import { Palette as SystemPalette } from "std-widgets.slint";
+
+// Design tokens. Every measurement in the interface resolves to one of these:
+// a value that appears nowhere in this file does not belong in a component.
+
+export global Space {
+    out property <length> xs: 4px;
+    out property <length> sm: 8px;
+    out property <length> md: 12px;
+    out property <length> lg: 16px;
+    out property <length> xl: 24px;
+    out property <length> xxl: 32px;
+    out property <length> section: 40px;
+}
+
+export global Radius {
+    out property <length> sm: 6px;
+    out property <length> md: 10px;
+    out property <length> lg: 14px;
+    out property <length> pill: 999px;
+}
+
+export global Type {
+    // Sizes climb by a fourth; weights carry the hierarchy so boxes do not have to.
+    out property <length> caption: 11px;
+    out property <length> small: 12px;
+    out property <length> body: 13px;
+    out property <length> emphasis: 14px;
+    out property <length> title: 17px;
+    out property <length> display: 22px;
+
+    out property <int> regular: 400;
+    out property <int> medium: 500;
+    out property <int> semibold: 600;
+    out property <int> bold: 700;
+}
+
+export global Motion {
+    out property <duration> instant: 90ms;
+    out property <duration> quick: 140ms;
+    out property <duration> calm: 220ms;
+}
+
+export global Theme {
+    // Follows the system until the person explicitly chooses Claro or Oscuro.
+    in-out property <bool> dark: SystemPalette.color-scheme == ColorScheme.dark;
+
+    // Surfaces, from furthest back to closest to the eye.
+    out property <color> canvas: dark ? #0f1115 : #f4f5f8;
+    out property <color> surface: dark ? #171a21 : #ffffff;
+    out property <color> raised: dark ? #262b36 : #f7f8fb;
+    out property <color> sunken: dark ? #0b0d11 : #e9ebf1;
+    // A page of the document is white in both themes: it is the paper, not chrome.
+    out property <color> page: #ffffff;
+
+    // Text. `secondary` holds AA against surface; `tertiary` is for non-essential detail only.
+    out property <color> text: dark ? #f6f7fa : #14171f;
+    out property <color> text-secondary: dark ? #b3bac7 : #5a6070;
+    out property <color> text-tertiary: dark ? #8b94a5 : #6b7280;
+    // Ink on a filled accent surface. Dark mode uses a dark ink because a
+    // light accent bright enough to read as an accent cannot carry white text.
+    out property <color> text-on-accent: dark ? #0d1220 : #ffffff;
+
+    // Lines. Hairlines separate; never draw a box where a hairline is enough.
+    out property <color> border: dark ? #ffffff2e : #0f172a29;
+    out property <color> border-strong: dark ? #ffffff7a : #0f172a8a;
+
+    // One accent for interaction. The brand red belongs to the icon and to danger,
+    // so it never competes with the primary action of a screen.
+    out property <color> accent: dark ? #7aa2ff : #2f5fe0;
+    out property <color> accent-hover: dark ? #7ba2ff : #2450c4;
+    out property <color> accent-pressed: dark ? #4a79e6 : #1c40a3;
+    out property <color> accent-soft: dark ? #5b8cff24 : #2f5fe014;
+
+    out property <color> success: dark ? #3ecf8e : #0a7a4c;
+    out property <color> success-soft: dark ? #3ecf8e24 : #0a7a4c0f;
+    out property <color> warning: dark ? #f0b429 : #8a5500;
+    out property <color> warning-soft: dark ? #f0b42924 : #8a55000f;
+    out property <color> danger: dark ? #ff6b6b : #c4242f;
+    out property <color> danger-soft: dark ? #ff6b6b24 : #c4242f14;
+
+    out property <color> focus-ring: dark ? #8fb3ff : #1c40a3;
+    out property <color> scrim: dark ? #00000099 : #0f172a66;
+
+    // Elevation. Shadows carry the layering, so no component invents its own.
+    out property <color> shadow-raised: dark ? #00000066 : #0f172a26;
+    out property <color> shadow-floating: dark ? #00000080 : #0f172a2e;
+    out property <color> shadow-page: dark ? #00000073 : #10182824;
+}
