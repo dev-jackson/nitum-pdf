@@ -8,4 +8,4 @@ Terminal=false
 Categories=Office;Viewer;
 Keywords=PDF;firma;firmar;certificado;documento;
 MimeType=application/pdf;
-StartupWMClass=nitum-pdf
+StartupWMClass=com.nitum.Pdf
