@@ -34,8 +34,14 @@ jobs:
           (cd dist && sha256sum -c nitum-pdf-0.0.0-linux-x86_64.deb.sha256)
           (cd dist && sha256sum -c nitum-pdf_0.0.0_amd64.deb.sha256)
           dpkg-deb --info "$package"
+          # The desktop only picks up a new icon and MIME association once these
+          # hooks have run, so they have to be present and executable.
+          dpkg-deb --info "$package" | grep -q 'postinst'
+          dpkg-deb --info "$package" | grep -q 'postrm'
           dpkg-deb --contents "$package" | tee "$RUNNER_TEMP/deb-contents.txt"
           grep -q './usr/lib/nitum-pdf/nitum-pdf' "$RUNNER_TEMP/deb-contents.txt"
+          grep -q './usr/share/applications/com.nitum.Pdf.desktop' "$RUNNER_TEMP/deb-contents.txt"
+          grep -q './usr/share/icons/hicolor/scalable/apps/com.nitum.Pdf.svg' "$RUNNER_TEMP/deb-contents.txt"
           grep -q './usr/lib/nitum-pdf/libpdfium.so' "$RUNNER_TEMP/deb-contents.txt"
 
   macos:

@@ -24,6 +24,10 @@ export struct PageItem {
 
 export component AppWindow inherits Window {
     title: document-open ? document-title + " — Nitum PDF" : "Nitum PDF";
+    // Our own chrome. The system title bar wasted a whole row on a string the
+    // toolbar already shows, and it never matched the application's own theme.
+    no-frame: true;
+    resize-border-width: 6px;
     preferred-width: 1180px; preferred-height: 820px;
     min-width: 720px; min-height: 560px;
     background: Theme.canvas;
@@ -137,6 +141,9 @@ export component AppWindow inherits Window {
     callback choose-token(int);
     callback request-page(int);
     callback visible-page(int);
+    // Moving a frameless window means asking the compositor to move it; setting
+    // a position outright is ignored on Wayland.
+    callback start-window-drag;
     changed placement-mode => {
         if (root.placement-mode) {
             root.placement-page = root.signature-position-set
@@ -198,6 +205,18 @@ export component AppWindow inherits Window {
             height: 52px;
             background: Theme.surface;
             Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
+
+            // Dragging the bar moves the window, the way a title bar does. It is
+            // declared before the controls so they stay on top and keep their
+            // clicks; only the empty stretch between them starts a drag.
+            drag-area := TouchArea {
+                mouse-cursor: default;
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down) { root.start-window-drag(); }
+                }
+                double-clicked => { root.maximized = !root.maximized; }
+            }
+
             HorizontalLayout {
                 padding-left: Space.md;
                 padding-right: Space.md;
@@ -287,7 +306,31 @@ export component AppWindow inherits Window {
                     tone: ButtonTone.primary;
                     clicked => { root.show-signature-center(); }
                 }
+
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle { width: 1px; height: 20px; background: Theme.border; }
+                }
+
+                IconAction {
+                    icon: @image-url("../../data/icons/window-minimize.svg");
+                    hint: "Minimizar la ventana";
+                    clicked => { root.minimized = true; }
+                }
+                IconAction {
+                    icon: root.maximized
+                        ? @image-url("../../data/icons/window-restore.svg")
+                        : @image-url("../../data/icons/window-maximize.svg");
+                    hint: root.maximized ? "Restaurar el tamaño" : "Maximizar la ventana";
+                    clicked => { root.maximized = !root.maximized; }
+                }
+                IconAction {
+                    icon: @image-url("../../data/icons/close.svg");
+                    hint: "Cerrar Nitum PDF";
+                    clicked => { root.close(); }
+                }
             }
+
         }
 
         Rectangle {

@@ -23,12 +23,14 @@ sed "s/@VERSION@/$version/g" "$project_dir/packaging/native/Info.plist.in" > "$a
 
 iconset="$stage/NitumPDF.iconset"
 mkdir -p "$iconset"
+# Rasterised from the same SVG that Linux installs, so every platform shows the
+# same application icon. It used to be built from the blue family wordmark,
+# which meant macOS displayed an icon unrelated to the product.
+source_icon="$project_dir/data/com.nitum.Pdf.svg"
 for size in 16 32 128 256 512; do
-  sips -z "$size" "$size" "$project_dir/data/nitum-family-mark.png" \
-    --out "$iconset/icon_${size}x${size}.png" >/dev/null
   double=$((size * 2))
-  sips -z "$double" "$double" "$project_dir/data/nitum-family-mark.png" \
-    --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+  rsvg-convert -w "$size" -h "$size" "$source_icon" -o "$iconset/icon_${size}x${size}.png"
+  rsvg-convert -w "$double" -h "$double" "$source_icon" -o "$iconset/icon_${size}x${size}@2x.png"
 done
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/NitumPDF.icns"
 xattr -cr "$app" 2>/dev/null || true
