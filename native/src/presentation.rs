@@ -12,6 +12,7 @@ use crate::{
     },
 };
 use anyhow::Result;
+use slint::winit_030::WinitWindowAccessor;
 use slint::{
     ComponentHandle, Image, Model, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel, Weak,
 };
@@ -153,6 +154,33 @@ fn describe_count(count: usize, singular: &str, plural: &str) -> String {
         format!("1 {singular}")
     } else {
         format!("{count} {plural}")
+    }
+}
+
+/// The identifier the desktop uses to tie our window to our launcher. It has to
+/// match the name of the installed `.desktop` file, its `StartupWMClass`, and
+/// its `Icon` key; `tests/desktop_identity.rs` keeps the four in step.
+pub const APPLICATION_ID: &str = "com.nitum.Pdf";
+
+/// Tells Wayland and X11 which application this window belongs to.
+///
+/// `slint::set_xdg_app_id` writes into the global Slint context, and it returns
+/// `PlatformError::NoPlatform` when that context does not exist yet — which is
+/// the case until a backend has been selected. Calling it before the backend is
+/// up therefore does nothing at all, and because the result used to be dropped
+/// the failure was silent: the shell saw a window with no application id, could
+/// not match it to `com.nitum.Pdf.desktop`, and showed a second, generic entry
+/// instead of ours.
+///
+/// So the backend is selected first, and only then is the id announced — still
+/// before any window is created, which is what the platform requires.
+fn announce_application_id() {
+    if let Err(error) = slint::BackendSelector::new().select() {
+        eprintln!("No se pudo inicializar el backend gráfico: {error}");
+        return;
+    }
+    if let Err(error) = slint::set_xdg_app_id(APPLICATION_ID) {
+        eprintln!("No se pudo anunciar el identificador de la aplicación: {error}");
     }
 }
 
@@ -421,11 +449,23 @@ pub fn run<P: DocumentPicker + 'static>(
         update_service,
         update_installer,
     } = services;
-    // Wayland and X11 match a window to its desktop entry through the XDG application id,
-    // so without this the shell has no way to find com.nitum.Pdf.desktop and shows no icon.
-    // It only applies to those platforms; elsewhere the call is inert.
-    let _ = slint::set_xdg_app_id("com.nitum.Pdf");
+    announce_application_id();
     let ui = AppWindow::new()?;
+
+    // The window has no system frame, so dragging our own title bar has to ask
+    // the compositor to move the window. Setting a position directly is ignored
+    // on Wayland, which is the platform this ships on first.
+    let weak_for_drag = ui.as_weak();
+    ui.on_start_window_drag(move || {
+        let Some(ui) = weak_for_drag.upgrade() else {
+            return;
+        };
+        ui.window().with_winit_window(|window| {
+            if let Err(error) = window.drag_window() {
+                eprintln!("El gestor de ventanas no permitió mover la ventana: {error}");
+            }
+        });
+    });
     let active_document: ActiveDocument = Arc::new(Mutex::new(None));
     let pending_document: PendingDocument = Arc::new(Mutex::new(None));
     let generation = Arc::new(AtomicU64::new(0));
@@ -1113,11 +1153,21 @@ pub fn run<P: DocumentPicker + 'static>(
             let appearance = PathBuf::from(ui.get_appearance_path().to_string());
             let identity_kind = ui.get_identity_kind();
             let page_index = ui.get_current_page().saturating_sub(1) as u32;
+            // Acrobat's model: a dragged rectangle defines the area, and a plain
+            // click drops the default size at that point.
             let requested_position = ui.get_signature_position_set().then(|| {
                 (
                     ui.get_signature_page().max(0) as u32,
-                    ui.get_signature_x().clamp(0.0, 1.0),
-                    ui.get_signature_y().clamp(0.0, 1.0),
+                    (
+                        ui.get_signature_x().clamp(0.0, 1.0),
+                        ui.get_signature_y().clamp(0.0, 1.0),
+                    ),
+                    ui.get_signature_area_set().then(|| {
+                        (
+                            ui.get_signature_x2().clamp(0.0, 1.0),
+                            ui.get_signature_y2().clamp(0.0, 1.0),
+                        )
+                    }),
                 )
             });
             if source.as_os_str().is_empty()
@@ -1195,13 +1245,19 @@ pub fn run<P: DocumentPicker + 'static>(
                             width: SIGNATURE_WIDTH_POINTS.min(dimensions.width_points.max(1.0)),
                             height: SIGNATURE_HEIGHT_POINTS.min(dimensions.height_points.max(1.0)),
                         },
-                        |(_, x, y)| {
-                            SignaturePlacement::from_normalized_point(
+                        |(_, start, end)| match end {
+                            Some(end) => SignaturePlacement::from_normalized_rect(
                                 selected_page,
                                 dimensions,
-                                x,
-                                y,
-                            )
+                                start,
+                                end,
+                            ),
+                            None => SignaturePlacement::from_normalized_point(
+                                selected_page,
+                                dimensions,
+                                start.0,
+                                start.1,
+                            ),
                         },
                     ),
                 )
@@ -1260,11 +1316,11 @@ pub fn run<P: DocumentPicker + 'static>(
                             ui.set_signing_success(true);
                             ui.set_signing_status(
                                 format!(
-                                    "{} válida de {signer}. Guardado como {name}.",
+                                    "{} Guardado como {name}, sin tocar el original.",
                                     if certification.is_some() {
-                                        "Certificación DocMDP"
+                                        format!("Documento certificado por {signer}.")
                                     } else {
-                                        "Firma"
+                                        format!("Firmado por {signer}.")
                                     }
                                 )
                                 .into(),
@@ -1359,10 +1415,12 @@ pub fn run<P: DocumentPicker + 'static>(
                             })
                             .filter_map(|report| report.pades_level)
                             .map(|level| match level {
-                                PadesLevel::BaselineB => "B-B",
-                                PadesLevel::BaselineT => "B-T",
-                                PadesLevel::BaselineLt => "B-LT",
-                                PadesLevel::BaselineLta => "B-LTA",
+                                PadesLevel::BaselineB => "básica, sin sello de tiempo (PAdES B-B)",
+                                PadesLevel::BaselineT => "con sello de tiempo (PAdES B-T)",
+                                PadesLevel::BaselineLt => {
+                                    "con validación duradera (PAdES B-LT)"
+                                }
+                                PadesLevel::BaselineLta => "de archivo (PAdES B-LTA)",
                             })
                             .collect::<Vec<_>>()
                             .join(", ");
@@ -1370,18 +1428,22 @@ pub fn run<P: DocumentPicker + 'static>(
                             .iter()
                             .filter_map(|report| report.certification)
                             .map(|permission| match permission {
-                                CertificationPermission::NoChanges => "sin cambios",
-                                CertificationPermission::FormFilling => "formularios y firmas",
+                                CertificationPermission::NoChanges => {
+                                    "no admite ningún cambio posterior"
+                                }
+                                CertificationPermission::FormFilling => {
+                                    "sólo admite rellenar formularios y firmar"
+                                }
                                 CertificationPermission::FormFillingAndAnnotations => {
-                                    "formularios, firmas y anotaciones"
+                                    "admite rellenar formularios, firmar y anotar"
                                 }
                             })
                             .collect::<Vec<_>>()
                             .join(", ");
                         let certification_summary = if certifications.is_empty() {
-                            "Sin certificación DocMDP".to_owned()
+                            "El documento no está certificado".to_owned()
                         } else {
-                            format!("Certificación DocMDP: {certifications}")
+                            format!("Documento certificado: {certifications}")
                         };
                         // One row per question a reader actually has, each
                         // with its own verdict. Folding these into a single
@@ -1460,7 +1522,7 @@ pub fn run<P: DocumentPicker + 'static>(
                         if !levels.is_empty() {
                             checks.push(VerificationCheck {
                                 tone: TONE_NEUTRAL,
-                                label: "Nivel de la firma".into(),
+                                label: "Tipo de respaldo".into(),
                                 detail: levels.as_str().into(),
                             });
                         }

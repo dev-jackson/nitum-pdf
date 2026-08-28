@@ -21,7 +21,10 @@ rustls-native-certs = "0.8.4"
 semver = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10"
-slint = { version = "1.17.1", features = ["renderer-skia"] }
+# `unstable-winit-030` exposes the underlying winit window, which is what lets a
+# frameless window be dragged by its own title bar: asking the compositor to
+# move the window is the only method Wayland honours.
+slint = { version = "1.17.1", features = ["renderer-skia", "unstable-winit-030"] }
 tempfile = "3.23"
 tokio = { version = "1.53", features = ["rt-multi-thread"] }
 underskrift = { path = "vendor/underskrift" }
