@@ -97,6 +97,42 @@ impl SignaturePlacement {
             height,
         }
     }
+
+    /// Places the signature inside the rectangle the person dragged over the
+    /// page, given as two opposite corners in page fractions with the origin at
+    /// the top-left corner.
+    ///
+    /// This is how Acrobat asks for a signature area: you drag a box and the
+    /// signature fills it. A drag smaller than `SIGNATURE_MIN_*_POINTS` is
+    /// treated as a click rather than a box, because a stray two-pixel drag
+    /// should not produce a signature too small to read.
+    pub fn from_normalized_rect(
+        page_index: u32,
+        page: PageSize,
+        start: (f32, f32),
+        end: (f32, f32),
+    ) -> Self {
+        let left_fraction = start.0.min(end.0).clamp(0.0, 1.0);
+        let right_fraction = start.0.max(end.0).clamp(0.0, 1.0);
+        let top_fraction = start.1.min(end.1).clamp(0.0, 1.0);
+        let bottom_fraction = start.1.max(end.1).clamp(0.0, 1.0);
+
+        let width = (right_fraction - left_fraction) * page.width_points;
+        let height = (bottom_fraction - top_fraction) * page.height_points;
+        if width < SIGNATURE_MIN_WIDTH_POINTS || height < SIGNATURE_MIN_HEIGHT_POINTS {
+            let centre_x = (left_fraction + right_fraction) / 2.0;
+            let centre_y = (top_fraction + bottom_fraction) / 2.0;
+            return Self::from_normalized_point(page_index, page, centre_x, centre_y);
+        }
+
+        Self {
+            page_index,
+            left: left_fraction * page.width_points,
+            bottom: page.height_points - bottom_fraction * page.height_points,
+            width: width.min(page.width_points),
+            height: height.min(page.height_points),
+        }
+    }
 }
 
 /// Size of a visible signature, in PDF points. The preview drawn over the page
@@ -106,6 +142,9 @@ pub const SIGNATURE_WIDTH_POINTS: f32 = 220.0;
 pub const SIGNATURE_HEIGHT_POINTS: f32 = 72.0;
 /// Margin from the page corner when nobody picks a spot.
 pub const SIGNATURE_DEFAULT_MARGIN_POINTS: f32 = 36.0;
+/// Below this a drag is a click, not a box: a signature that small is unreadable.
+pub const SIGNATURE_MIN_WIDTH_POINTS: f32 = 60.0;
+pub const SIGNATURE_MIN_HEIGHT_POINTS: f32 = 24.0;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SignatureReport {
@@ -199,6 +238,56 @@ mod tests {
         let top_left = SignaturePlacement::from_normalized_point(0, page, -1.0, -1.0);
         assert_eq!(top_left.left, 0.0);
         assert_eq!(top_left.bottom, 728.0);
+    }
+
+    #[test]
+    fn a_dragged_rectangle_becomes_the_signature_area() {
+        let page = PageSize {
+            width_points: 600.0,
+            height_points: 800.0,
+            rotation_degrees: 0,
+        };
+        // Dragging from a quarter in to three quarters across, and from a tenth
+        // down to a third down, fills exactly that box.
+        let dragged = SignaturePlacement::from_normalized_rect(1, page, (0.25, 0.10), (0.75, 0.30));
+        // Fractions of a page are floats, so these compare within a rounding error.
+        let close = |value: f32, expected: f32| (value - expected).abs() < 0.01;
+        assert_eq!(dragged.page_index, 1);
+        assert!(close(dragged.left, 150.0), "left was {}", dragged.left);
+        assert!(close(dragged.width, 300.0), "width was {}", dragged.width);
+        assert!(
+            close(dragged.height, 160.0),
+            "height was {}",
+            dragged.height
+        );
+        // 0.30 of the way down is 240 points from the top, so 560 up from the bottom.
+        assert!(
+            close(dragged.bottom, 560.0),
+            "bottom was {}",
+            dragged.bottom
+        );
+
+        // Dragging backwards describes the same box.
+        let backwards =
+            SignaturePlacement::from_normalized_rect(1, page, (0.75, 0.30), (0.25, 0.10));
+        assert_eq!(backwards.left, dragged.left);
+        assert_eq!(backwards.bottom, dragged.bottom);
+        assert_eq!(backwards.width, dragged.width);
+        assert_eq!(backwards.height, dragged.height);
+    }
+
+    #[test]
+    fn a_drag_too_small_to_read_is_treated_as_a_click() {
+        let page = PageSize {
+            width_points: 600.0,
+            height_points: 800.0,
+            rotation_degrees: 0,
+        };
+        // A two-pixel wobble while clicking must not produce a sliver.
+        let wobble = SignaturePlacement::from_normalized_rect(0, page, (0.5, 0.5), (0.503, 0.502));
+        assert_eq!(wobble.width, SIGNATURE_WIDTH_POINTS);
+        assert_eq!(wobble.height, SIGNATURE_HEIGHT_POINTS);
+        assert!((wobble.left + wobble.width / 2.0 - 300.9).abs() < 0.01);
     }
 
     #[test]

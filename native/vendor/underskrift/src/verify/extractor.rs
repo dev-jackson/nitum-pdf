@@ -153,18 +153,13 @@ pub fn extract_signatures_from_doc(doc: &Document) -> Result<Vec<ExtractedSignat
             .map(SignatureType::from_sub_filter)
             .unwrap_or(SignatureType::Unknown("missing".to_string()));
 
-        // Extract Contents (the CMS/PKCS#7 bytes)
-        // lopdf parses the hex string into raw bytes for us.
-        // We strip trailing zero padding to get the actual DER.
+        // Extract Contents (the CMS/PKCS#7 bytes). /Contents is a fixed-size hex
+        // string, so the real DER is followed by zero padding that has to go.
         let cms_bytes = match sig_dict.get(b"Contents").and_then(Object::as_str) {
-            Ok(bytes) => {
-                let mut data = bytes.to_vec();
-                // Trim trailing zeros (padding from the hex placeholder)
-                while data.last() == Some(&0) {
-                    data.pop();
-                }
-                data
-            }
+            Ok(bytes) => match der_length(bytes) {
+                Some(length) => bytes[..length].to_vec(),
+                None => continue,
+            },
             Err(_) => continue,
         };
 
@@ -196,6 +191,43 @@ pub fn extract_signatures_from_doc(doc: &Document) -> Result<Vec<ExtractedSignat
 }
 
 /// Extract ByteRange values from a signature dictionary.
+/// Total length of the DER value at the start of `data`, padding excluded.
+///
+/// The padding cannot be found by trimming trailing zero bytes: a DER encoding
+/// may legitimately end in `0x00`, and trimming then eats a byte of the
+/// signature itself. That produced a CMS one byte short of its declared length,
+/// so a perfectly good signature failed to verify — intermittently, because it
+/// depended on whether the last byte happened to be zero.
+///
+/// Reading the length out of the header instead is exact.
+fn der_length(data: &[u8]) -> Option<usize> {
+    // tag, then either a short length or a count of long-form length bytes.
+    let first_length_byte = *data.get(1)?;
+    if first_length_byte < 0x80 {
+        return Some(2 + usize::from(first_length_byte));
+    }
+
+    let length_of_length = usize::from(first_length_byte & 0x7f);
+    // 0x80 is the indefinite form, which DER forbids; more than 8 bytes of
+    // length cannot be represented here either.
+    if length_of_length == 0 || length_of_length > 8 {
+        return None;
+    }
+
+    let mut content_length = 0_usize;
+    for index in 0..length_of_length {
+        let byte = *data.get(2 + index)?;
+        content_length = content_length
+            .checked_mul(256)?
+            .checked_add(usize::from(byte))?;
+    }
+
+    let total = content_length
+        .checked_add(2)?
+        .checked_add(length_of_length)?;
+    (total <= data.len()).then_some(total)
+}
+
 fn extract_byte_range_values(sig_dict: &lopdf::Dictionary) -> Option<[usize; 4]> {
     let arr = sig_dict.get(b"ByteRange").ok()?.as_array().ok()?;
     if arr.len() != 4 {
@@ -261,5 +293,38 @@ mod tests {
         .expect("failed to read sample PDF");
         let sigs = extract_signatures(&pdf_data).expect("extraction failed");
         assert!(sigs.is_empty(), "unsigned PDF should have no signatures");
+    }
+
+    #[test]
+    fn der_length_keeps_a_signature_that_ends_in_a_zero_byte() {
+        // A short-form SEQUENCE of three bytes whose last byte is 0x00, followed
+        // by the zero padding of the /Contents placeholder. Trimming trailing
+        // zeros ate the signature's own final byte, leaving the CMS one byte
+        // short of its declared length and failing verification at random.
+        let mut contents = vec![0x30, 0x03, 0xAA, 0xBB, 0x00];
+        contents.extend(std::iter::repeat_n(0x00, 64));
+        assert_eq!(der_length(&contents), Some(5));
+    }
+
+    #[test]
+    fn der_length_reads_the_long_form_header() {
+        // 0x82 says two length bytes follow: 0x1770 is 6000 content bytes, plus
+        // the four header bytes.
+        let mut contents = vec![0x30, 0x82, 0x17, 0x70];
+        contents.extend(std::iter::repeat_n(0x41, 6000));
+        contents.extend(std::iter::repeat_n(0x00, 128));
+        assert_eq!(der_length(&contents), Some(6004));
+    }
+
+    #[test]
+    fn der_length_refuses_a_header_that_promises_more_than_it_has() {
+        // A truncated or malformed value must be rejected rather than read past
+        // the end of the buffer.
+        let contents = vec![0x30, 0x82, 0x17, 0x70, 0x41, 0x41];
+        assert_eq!(der_length(&contents), None);
+        assert_eq!(der_length(&[0x30]), None);
+        assert_eq!(der_length(&[]), None);
+        // The indefinite form is not valid DER.
+        assert_eq!(der_length(&[0x30, 0x80, 0x00, 0x00]), None);
     }
 }

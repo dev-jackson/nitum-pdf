@@ -5,7 +5,7 @@
   <key>CFBundleDisplayName</key><string>Nitum PDF</string>
   <key>CFBundleExecutable</key><string>nitum-pdf</string>
   <key>CFBundleIconFile</key><string>NitumPDF</string>
-  <key>CFBundleIdentifier</key><string>com.nitum.pdf</string>
+  <key>CFBundleIdentifier</key><string>com.nitum.Pdf</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleName</key><string>Nitum PDF</string>
   <key>CFBundlePackageType</key><string>APPL</string>

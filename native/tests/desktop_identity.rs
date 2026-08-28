@@ -49,11 +49,104 @@ fn the_desktop_entry_matches_the_application_id() {
 
 #[test]
 fn the_application_announces_that_same_id() {
+    assert_eq!(
+        nitum_pdf::presentation::APPLICATION_ID,
+        APP_ID,
+        "the id the window announces and the id the desktop entry declares are \
+         the same string"
+    );
+
+    // Ordering matters and is easy to get wrong silently: see
+    // tests/application_id.rs, which proves the call does nothing at all when a
+    // backend has not been selected first.
     let source = include_str!("../src/presentation.rs");
+    let selects = source
+        .find("BackendSelector::new().select()")
+        .expect("a backend has to be selected before the id can be announced");
+    let announces = source
+        .find("set_xdg_app_id(APPLICATION_ID)")
+        .expect("the application has to announce its id");
     assert!(
-        source.contains(&format!("set_xdg_app_id(\"{APP_ID}\")")),
-        "the application must announce {APP_ID} before its window is shown, or \
-         Wayland cannot find com.nitum.Pdf.desktop"
+        selects < announces,
+        "the backend must be selected before set_xdg_app_id, or the call fails \
+         with NoPlatform and the window reaches the compositor unidentified"
+    );
+    let creates_window = source
+        .find("AppWindow::new()")
+        .expect("the window is created in presentation.rs");
+    assert!(
+        announces < creates_window,
+        "the id has to be announced before any window exists"
+    );
+}
+
+#[test]
+fn every_platform_uses_the_same_icon_artwork() {
+    let macos = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../packaging/native/build-macos-pkg.sh"
+    ))
+    .expect("the macOS build script is in packaging/native");
+    assert!(
+        macos.contains("data/com.nitum.Pdf.png"),
+        "the macOS bundle must be built from the application icon; it used to \
+         rasterise data/nitum-family-mark.png, so macOS showed a blue wordmark \
+         that has nothing to do with the product"
+    );
+    assert!(
+        !macos.contains("nitum-family-mark"),
+        "the family wordmark is not the application icon"
+    );
+
+    // macOS runners have `sips` but not `rsvg-convert`, so the master the bundle
+    // downscales from is a committed PNG rendered from the same SVG Linux ships.
+    let master = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../data/com.nitum.Pdf.png"
+    ))
+    .expect("the 1024 px master of the application icon ships in data/");
+    let width = u32::from_be_bytes(master[16..20].try_into().expect("PNG header"));
+    let height = u32::from_be_bytes(master[20..24].try_into().expect("PNG header"));
+    assert_eq!(
+        (width, height),
+        (1024, 1024),
+        "the master has to be large enough for the 512@2x entry of the iconset"
+    );
+
+    let plist = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../packaging/native/Info.plist.in"
+    ))
+    .expect("the Info.plist template is in packaging/native");
+    assert!(
+        plist.contains(&format!("<string>{APP_ID}</string>")),
+        "the bundle identifier has to be the same {APP_ID} the rest of the \
+         product uses"
+    );
+}
+
+#[test]
+fn the_package_refreshes_the_desktop_caches() {
+    let script = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../packaging/native/build-linux-deb.sh"
+    ))
+    .expect("the Debian build script is in packaging/native");
+    // A freshly installed application keeps showing a generic icon until the
+    // icon theme cache is rebuilt, and is not offered for PDFs until the MIME
+    // database is refreshed.
+    assert!(
+        script.contains("gtk-update-icon-cache"),
+        "the package has to refresh the icon theme cache when it is installed"
+    );
+    assert!(
+        script.contains("update-desktop-database"),
+        "the package has to refresh the desktop database when it is installed"
+    );
+    assert!(
+        script.contains("DEBIAN/postinst") && script.contains("DEBIAN/postrm"),
+        "those refreshes belong in maintainer scripts, so they run on install \
+         and on removal"
     );
 }
 

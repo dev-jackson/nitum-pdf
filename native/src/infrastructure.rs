@@ -858,7 +858,7 @@ impl NativePadesSigning {
         }
         let source = fs::read(request.source).context("no se pudo leer el PDF")?;
         if request.certification.is_some() && !self.verify_bytes(&source)?.is_empty() {
-            bail!("La certificación DocMDP debe ser la primera firma del documento.");
+            bail!("Para certificar un documento, la certificación tiene que ser su primera firma.");
         }
         let pades_level = match request.level {
             PadesLevel::BaselineB => underskrift::PadesLevel::BB,
@@ -991,7 +991,7 @@ impl NativePadesSigning {
                 CertificationPermission::FormFillingAndAnnotations => 3,
             };
             let inspection = inspect_signatures(&signed)
-                .context("no se pudo comprobar la certificación DocMDP")?;
+                .context("no se pudo comprobar la certificación del documento")?;
             if inspection.num_signatures != 1
                 || inspection.catalog_doc_mdp_obj_num
                     != inspection
@@ -1004,7 +1004,7 @@ impl NativePadesSigning {
                     .and_then(|signature| signature.doc_mdp_permissions)
                     != Some(expected)
             {
-                bail!("La certificación DocMDP no quedó incorporada correctamente.");
+                bail!("La certificación no quedó incorporada correctamente en el documento.");
             }
         }
         Self::write_new_file(request.target, &signed)?;
