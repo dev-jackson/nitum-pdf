@@ -1,7 +1,7 @@
 use i_slint_backend_testing::{
     AccessibleRole, ElementHandle, ElementQuery, TestingBackend, TestingBackendOptions,
 };
-use nitum_pdf::{AppWindow, PageItem, Palette};
+use nitum_pdf::{AppWindow, PageItem, Theme};
 use slint::{
     ComponentHandle, Image, LogicalSize, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel,
 };
@@ -83,7 +83,7 @@ fn light_dark_and_signature_center_render_headlessly() {
     assert_accessible_action(&ui, "Abrir un PDF", "empty shell");
 
     let light = ui.window().take_snapshot().unwrap();
-    ui.global::<Palette>().set_dark(true);
+    ui.global::<Theme>().set_dark(true);
     let dark = ui.window().take_snapshot().unwrap();
     assert!(luminance(light.as_bytes()) > luminance(dark.as_bytes()) + 35.0);
 
@@ -146,7 +146,9 @@ fn light_dark_and_signature_center_render_headlessly() {
     ui.set_identity_path("identity.p12".into());
     ui.set_active_dialog(2);
     assert_accessible_controls(&ui, "signing flow");
-    assert_accessible_action(&ui, "Cancelar", "signing flow");
+    // Every step keeps two ways out: back to the previous step, and close.
+    assert_accessible_action(&ui, "Atrás", "signing flow");
+    assert_accessible_action(&ui, "Cerrar", "signing flow");
     let signing = ui.window().take_snapshot().unwrap();
     assert_ne!(document.as_bytes(), signing.as_bytes());
     save_if_requested("signing-flow-dark.png", &signing);
@@ -256,7 +258,7 @@ fn light_dark_and_signature_center_render_headlessly() {
     assert_ne!(update_available.as_bytes(), up_to_date.as_bytes());
     save_if_requested("up-to-date-dark.png", &up_to_date);
 
-    ui.global::<Palette>().set_dark(false);
+    ui.global::<Theme>().set_dark(false);
     ui.set_active_dialog(2);
     let _transition_frame = ui.window().take_snapshot().unwrap();
     let signing_light = ui.window().take_snapshot().unwrap();

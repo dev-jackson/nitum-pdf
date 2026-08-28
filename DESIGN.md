@@ -31,3 +31,24 @@ La pregunta de control para cada pantalla es:
 8. El estado no depende solo del color.
 9. Cada flujo importante tiene captura reproducible y prueba funcional.
 10. Antes de publicar se repite la pregunta de control de este documento.
+
+## Reglas de superficie
+
+Las diez de arriba son de producto. Estas cinco son de acabado, y salieron de
+medir las capturas una por una en agosto de 2026 (ver `docs/ux-audit.md` para lo
+que estaba mal y `docs/ux-spec.md` para los números que lo sustituyen).
+
+11. Ningún archivo salvo `native/ui/theme.slint` nombra un color, un tamaño de
+    letra, un radio o un espaciado. Si un valor hace falta y no está, se añade a
+    la escala; no se escribe suelto.
+12. Todo par de colores cumple WCAG 2.2 y se comprueba solo:
+    `cargo test --test theme_contrast`. Un color nuevo que no llegue al mínimo
+    rompe la compilación de pruebas.
+13. Una pantalla tiene una columna de contenido. Título, texto, filas e iconos
+    empiezan en la misma x; las acciones al final de una fila terminan en la
+    misma x. Se comprueba midiendo la captura, no mirándola.
+14. Un control que se reconstruye no se anima. Una animación de fondo sigue
+    pintando el color de la instancia anterior, y el resultado es que la
+    selección aparece en la fila equivocada.
+15. Un control que no se puede usar no se enseña. Si no hay documento abierto no
+    hay nada que firmar, así que el botón no está: no se deja apagado.
