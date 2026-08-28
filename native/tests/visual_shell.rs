@@ -1,9 +1,10 @@
 use i_slint_backend_testing::{
     AccessibleRole, ElementHandle, ElementQuery, TestingBackend, TestingBackendOptions,
 };
-use nitum_pdf::{AppWindow, PageItem, Theme};
+use nitum_pdf::{AppWindow, PageItem, Theme, VerificationCheck};
 use slint::{
-    ComponentHandle, Image, LogicalSize, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel,
+    ComponentHandle, Image, LogicalSize, ModelRc, Rgba8Pixel, SharedPixelBuffer, SharedString,
+    VecModel,
 };
 use std::rc::Rc;
 
@@ -289,4 +290,68 @@ fn light_dark_and_signature_center_render_headlessly() {
     let identities_light = ui.window().take_snapshot().unwrap();
     assert!(luminance(identities_light.as_bytes()) > luminance(identity_library.as_bytes()));
     save_if_requested("identity-library-light.png", &identities_light);
+
+    // The password, verification and token dialogs had no capture at all, which
+    // is how their defects survived every review: DESIGN.md rule 9 asks for a
+    // reproducible capture of each important flow.
+    ui.set_unlock_status("La contraseña no es correcta.".into());
+    ui.set_active_dialog(3);
+    let _transition_frame = ui.window().take_snapshot().unwrap();
+    let unlock_light = ui.window().take_snapshot().unwrap();
+    assert_accessible_controls(&ui, "unlock");
+    assert_accessible_action(&ui, "Abrir PDF", "unlock");
+    save_if_requested("unlock-light.png", &unlock_light);
+    ui.set_unlock_status("".into());
+
+    // Intact and covered, but from a certificate nobody vouches for: the case
+    // the old single green sentence hid.
+    ui.set_verification_success(true);
+    ui.set_verification_checks(ModelRc::new(Rc::new(VecModel::from(vec![
+        VerificationCheck {
+            tone: 1,
+            label: "El documento no se ha alterado".into(),
+            detail: "El contenido coincide exactamente con lo que se firmó.".into(),
+        },
+        VerificationCheck {
+            tone: 1,
+            label: "La firma cubre todo el documento".into(),
+            detail: "No hay páginas ni cambios fuera de lo firmado.".into(),
+        },
+        VerificationCheck {
+            tone: 2,
+            label: "No podemos confirmar quién emitió el certificado".into(),
+            detail:
+                "La firma es válida, pero nadie en este equipo avala la identidad del firmante."
+                    .into(),
+        },
+        VerificationCheck {
+            tone: 0,
+            label: "Firmado por Identidad de prueba".into(),
+            detail: "1 firma, 1 sello de tiempo. Sin certificación DocMDP.".into(),
+        },
+    ]))));
+    ui.set_active_dialog(5);
+    let _transition_frame = ui.window().take_snapshot().unwrap();
+    let verification_light = ui.window().take_snapshot().unwrap();
+    assert_accessible_controls(&ui, "verification");
+    assert_accessible_action(&ui, "Cerrar", "verification");
+    save_if_requested("verification-light.png", &verification_light);
+
+    ui.global::<Theme>().set_dark(true);
+    ui.set_verification_success(false);
+    ui.set_verification_checks(ModelRc::default());
+    ui.set_verification_status("Este PDF no contiene ninguna firma digital.".into());
+    let verification_empty = ui.window().take_snapshot().unwrap();
+    save_if_requested("verification-empty-dark.png", &verification_empty);
+
+    ui.set_token_status("Encontramos 2 dispositivos.".into());
+    ui.set_token_options(ModelRc::new(Rc::new(VecModel::from(vec![
+        SharedString::from("YubiKey 5 NFC · 31245678"),
+        SharedString::from("DNIe 4.0 · 00998877"),
+    ]))));
+    ui.set_active_dialog(6);
+    let _transition_frame = ui.window().take_snapshot().unwrap();
+    let tokens_dark = ui.window().take_snapshot().unwrap();
+    assert_accessible_controls(&ui, "tokens");
+    save_if_requested("tokens-dark.png", &tokens_dark);
 }
