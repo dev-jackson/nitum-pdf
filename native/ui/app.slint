@@ -67,6 +67,8 @@ export component AppWindow inherits Window {
     in-out property <bool> verification-success: false;
     in-out property <string> verification-status: "";
     in-out property <[VerificationCheck]> verification-checks: [];
+    // The status line is a plain statement unless something actually went wrong.
+    in-out property <bool> verification-failed: false;
     in-out property <int> pades-level: 0;
     // -1 = approval signature; 1..3 = DocMDP certification permission.
     in-out property <int> certification-permission: -1;
@@ -1099,14 +1101,10 @@ export component AppWindow inherits Window {
 
             if root.verification-checks.length == 0 && root.verification-status != "": Note {
                 message: root.verification-status;
-                tone: root.verification-busy
-                    ? StatusTone.neutral
-                    : root.verification-success ? StatusTone.positive : StatusTone.negative;
-                icon: root.verification-busy
-                    ? @image-url("../../data/icons/search.svg")
-                    : root.verification-success
-                        ? @image-url("../../data/icons/shield-check.svg")
-                        : @image-url("../../data/icons/alert.svg");
+                tone: root.verification-failed ? StatusTone.negative : StatusTone.neutral;
+                icon: root.verification-failed
+                    ? @image-url("../../data/icons/alert.svg")
+                    : @image-url("../../data/icons/document.svg");
             }
         }
 

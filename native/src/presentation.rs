@@ -1294,8 +1294,13 @@ pub fn run<P: DocumentPicker + 'static>(
                 ui.set_verification_busy(false);
                 match result {
                     Ok(reports) if reports.is_empty() => {
+                        // Not signed is a fact about the document, not a fault.
                         ui.set_verification_success(false);
-                        ui.set_verification_status("Este PDF no contiene firmas digitales.".into());
+                        ui.set_verification_failed(false);
+                        ui.set_verification_checks(ModelRc::default());
+                        ui.set_verification_status(
+                            "Este PDF no contiene ninguna firma digital.".into(),
+                        );
                     }
                     Ok(reports) => {
                         let count = reports
@@ -1435,11 +1440,13 @@ pub fn run<P: DocumentPicker + 'static>(
                         }
 
                         ui.set_verification_success(intact);
+                        ui.set_verification_failed(false);
                         ui.set_verification_status("".into());
                         ui.set_verification_checks(ModelRc::new(Rc::new(VecModel::from(checks))));
                     }
                     Err(error) => {
                         ui.set_verification_success(false);
+                        ui.set_verification_failed(true);
                         ui.set_verification_checks(ModelRc::default());
                         ui.set_verification_status(error.to_string().into());
                     }
