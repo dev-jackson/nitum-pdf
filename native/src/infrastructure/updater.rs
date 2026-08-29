@@ -289,19 +289,61 @@ impl UpdateInstaller for NativeUpdateInstaller {
         }
 
         #[cfg(not(target_os = "windows"))]
-        let executable = std::env::current_exe()?;
-        #[cfg(not(target_os = "windows"))]
-        let mut command = Command::new(executable);
-        #[cfg(not(target_os = "windows"))]
-        if let Some(document) = document {
-            command.arg(document);
+        {
+            let executable = relaunch_target()?;
+            let mut command = Command::new(&executable);
+            if let Some(document) = document {
+                command.arg(document);
+            }
+            command.spawn().with_context(|| {
+                format!(
+                    "No se pudo volver a abrir Nitum PDF desde {}",
+                    executable.display()
+                )
+            })?;
+            Ok(())
         }
-        #[cfg(not(target_os = "windows"))]
-        command
-            .spawn()
-            .context("No se pudo volver a abrir Nitum PDF")?;
-        #[cfg(not(target_os = "windows"))]
-        Ok(())
+    }
+}
+
+/// The program to start once the update has been installed.
+///
+/// This deliberately does not simply use `current_exe()`. Installing the update
+/// replaces the binary this process is running from, and on Linux
+/// `/proc/self/exe` then resolves to the old inode with " (deleted)" appended to
+/// its path. Spawning that path fails, so the application quit without ever
+/// coming back — while the interface had promised it would restart.
+///
+/// The launcher the package installs is a stable path that resolves to whatever
+/// is installed right now, so it is preferred when present. Otherwise the
+/// current executable is used with the marker stripped, which points at the file
+/// that has just replaced it.
+#[cfg(not(target_os = "windows"))]
+fn relaunch_target() -> Result<PathBuf> {
+    const INSTALLED_LAUNCHER: &str = "/usr/bin/nitum-pdf";
+
+    if cfg!(target_os = "linux") {
+        let launcher = Path::new(INSTALLED_LAUNCHER);
+        if launcher.is_file() {
+            return Ok(launcher.to_path_buf());
+        }
+    }
+
+    let current = std::env::current_exe().context("no se pudo localizar el ejecutable actual")?;
+    Ok(strip_deleted_marker(&current))
+}
+
+/// Removes the " (deleted)" suffix Linux appends to `/proc/self/exe` once the
+/// running binary has been replaced on disk.
+#[cfg(not(target_os = "windows"))]
+fn strip_deleted_marker(path: &Path) -> PathBuf {
+    const MARKER: &str = " (deleted)";
+    match path.to_str() {
+        Some(text) => match text.strip_suffix(MARKER) {
+            Some(trimmed) => PathBuf::from(trimmed),
+            None => path.to_path_buf(),
+        },
+        None => path.to_path_buf(),
     }
 }
 
@@ -393,5 +435,31 @@ mod tests {
 
         std::fs::write(&package, b"instalador alterado").unwrap();
         assert!(verify_sha256(&package, &expected).is_err());
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn the_deleted_marker_is_stripped_from_the_relaunch_path() {
+        // Installing the update replaces the binary this process runs from, and
+        // Linux then resolves /proc/self/exe to the old inode with this suffix.
+        // Spawning that path fails, so the application quit and never came back
+        // even though the interface had promised it would restart.
+        assert_eq!(
+            strip_deleted_marker(Path::new("/usr/lib/nitum-pdf/nitum-pdf (deleted)")),
+            Path::new("/usr/lib/nitum-pdf/nitum-pdf")
+        );
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn an_ordinary_path_is_left_alone() {
+        for path in [
+            "/usr/lib/nitum-pdf/nitum-pdf",
+            // Only the suffix counts: a directory that happens to contain the
+            // words must survive untouched.
+            "/home/ana/apps (deleted)/nitum-pdf",
+        ] {
+            assert_eq!(strip_deleted_marker(Path::new(path)), Path::new(path));
+        }
     }
 }
