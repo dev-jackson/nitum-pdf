@@ -698,17 +698,10 @@ impl SignatureTemplate {
     }
 
     /// Escape special PDF text characters in a string.
-    fn escape_pdf_text(text: &str) -> String {
-        let mut escaped = String::with_capacity(text.len());
-        for ch in text.chars() {
-            match ch {
-                '\\' => escaped.push_str("\\\\"),
-                '(' => escaped.push_str("\\("),
-                ')' => escaped.push_str("\\)"),
-                _ => escaped.push(ch),
-            }
-        }
-        escaped
+    /// Kept only as a thin wrapper so the template path shares the single
+    /// WinAnsi encoder; escaping text as UTF-8 mangled every accented letter.
+    fn escape_pdf_text(text: &str) -> Vec<u8> {
+        crate::visual::font::encode_pdf_text(text)
     }
 }
 
@@ -786,8 +779,8 @@ impl AppearanceRenderer for SignatureTemplate {
 
             stream.extend_from_slice(format!("{:.2} {:.2} Td\n", x, y).as_bytes());
 
-            let escaped = Self::escape_pdf_text(line);
-            stream.extend_from_slice(format!("({}) Tj\n", escaped).as_bytes());
+            stream.extend_from_slice(&Self::escape_pdf_text(line));
+            stream.extend_from_slice(b" Tj\n");
 
             // Reset position for next line (absolute Td usage)
             if i + 1 < resolved_lines.len() {
@@ -1047,7 +1040,7 @@ mod tests {
     #[test]
     fn test_signature_template_escape_pdf_text() {
         let escaped = SignatureTemplate::escape_pdf_text("Test (with) parens & backslash\\");
-        assert!(escaped.contains("\\(with\\)"));
-        assert!(escaped.contains("backslash\\\\"));
+        assert!(escaped.windows(8).any(|window| window == b"\\(with\\)"));
+        assert!(escaped.windows(11).any(|window| window == b"backslash\\\\"));
     }
 }

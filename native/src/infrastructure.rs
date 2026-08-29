@@ -21,9 +21,9 @@ use std::{
     sync::Mutex,
 };
 use underskrift::{
-    Arrangement, CryptoSigner, DocMdpPermissions, ImageConfig, ImageFormat, ImageScale, PdfSigner,
-    SignatureLayout, SignatureRect, SigningOptions, SoftwareSigner, TextConfig,
-    VisibleSignatureConfig,
+    Arrangement, Border, Color, CryptoSigner, DocMdpPermissions, ImageConfig, ImageFormat,
+    ImageScale, PdfSigner, SignatureLayout, SignatureRect, SigningOptions, SoftwareSigner,
+    TextConfig, TextLine, VisibleSignatureConfig,
     inspect::inspect_signatures,
     ltv::{
         CrlClient, DssBuilder, OcspClient, ValidationStatus, VriEntry, add_document_security_store,
@@ -542,6 +542,85 @@ impl OpenPdf for NativePdfDocument {
     }
 }
 
+/// The common name inside an X.501 distinguished name, or the whole name when
+/// it carries no CN.
+///
+/// A distinguished name prints as `CN=Ana Pérez,O=Empresa,C=EC`, which is not
+/// what belongs on a signature stamp: people expect to read their name.
+fn common_name(name: &x509_cert::name::Name) -> String {
+    const COMMON_NAME_OID: &str = "2.5.4.3";
+    for group in name.0.iter() {
+        for attribute in group.0.iter() {
+            if attribute.oid.to_string() == COMMON_NAME_OID
+                && let Ok(value) = attribute.value.decode_as::<der::asn1::Utf8StringRef<'_>>()
+            {
+                return value.as_str().to_owned();
+            }
+        }
+    }
+    name.to_string()
+}
+
+/// Local date and time as `dd/mm/aaaa hh:mm`.
+///
+/// The stamp is read by people, so it uses the order they write dates in rather
+/// than the ISO ordering the PDF stores internally.
+fn local_timestamp() -> String {
+    let now = jiff::Zoned::now();
+    format!(
+        "{:02}/{:02}/{} {:02}:{:02}",
+        now.day(),
+        now.month(),
+        now.year(),
+        now.hour(),
+        now.minute()
+    )
+}
+
+/// The lines a visible signature carries when nobody supplies an image.
+///
+/// This used to be `TextConfig::default()`, whose `lines` field is empty, so a
+/// visible signature was drawn as an empty rectangle: no name, no issuer, no
+/// date. Everything it needs is already in the certificate doing the signing,
+/// so the stamp fills itself in and the person has to supply nothing.
+///
+/// It deliberately does not claim the signature is valid. A drawing on a page
+/// proves nothing — only verifying the document does — and saying otherwise on
+/// the stamp would teach people to trust the wrong thing.
+fn appearance_lines(
+    certificate_der: &[u8],
+    reason: Option<&str>,
+    location: Option<&str>,
+) -> Vec<TextLine> {
+    let mut lines = Vec::new();
+
+    match Certificate::from_der(certificate_der) {
+        Ok(certificate) => {
+            lines.push(
+                TextLine::new(format!(
+                    "Firmado por: {}",
+                    common_name(&certificate.tbs_certificate.subject)
+                ))
+                .bold(),
+            );
+            lines.push(TextLine::new(format!(
+                "Emitido por: {}",
+                common_name(&certificate.tbs_certificate.issuer)
+            )));
+        }
+        Err(_) => lines.push(TextLine::new("Firmado digitalmente").bold()),
+    }
+
+    lines.push(TextLine::new(format!("Fecha: {}", local_timestamp())));
+    if let Some(reason) = reason.filter(|value| !value.trim().is_empty()) {
+        lines.push(TextLine::new(format!("Motivo: {reason}")));
+    }
+    if let Some(location) = location.filter(|value| !value.trim().is_empty()) {
+        lines.push(TextLine::new(format!("Ubicación: {location}")));
+    }
+    lines
+}
+
 pub struct NativePadesSigning {
     runtime: tokio::runtime::Runtime,
     trust_stores: TrustStoreSet,
@@ -873,6 +952,13 @@ impl NativePadesSigning {
             std::env::var("NITUM_PDF_TSA_URL")
                 .unwrap_or_else(|_| "http://timestamp.digicert.com".to_owned())
         });
+        // The stamp writes itself from the certificate that is signing, so a
+        // visible signature carries the signer, the issuer and the date whether
+        // or not the person also chose an image.
+        let signature_text = TextConfig {
+            lines: appearance_lines(identity.certificate_der(), request.reason, request.location),
+            ..TextConfig::default()
+        };
         let appearance_layout = if let Some(path) = request.appearance {
             let data = fs::read(path).context("no se pudo leer la firma visual guardada")?;
             let format = match path
@@ -891,13 +977,13 @@ impl NativePadesSigning {
                     format,
                     scale: ImageScale::FitPreserveAspect,
                 },
-                text: TextConfig::default(),
+                text: signature_text,
                 arrangement: Arrangement::ImageLeftTextRight,
             })
         } else {
             request
                 .placement
-                .map(|_| SignatureLayout::TextOnly(TextConfig::default()))
+                .map(|_| SignatureLayout::TextOnly(signature_text))
         };
         let options = SigningOptions {
             pades_level,
@@ -917,8 +1003,15 @@ impl NativePadesSigning {
                         ury: placement.bottom + placement.height,
                     },
                     layout,
-                    background_color: None,
-                    border: None,
+                    // The stamp sits on top of the document, so it needs its own
+                    // ground: without one the text underneath showed straight
+                    // through and neither could be read. A thin rule marks where
+                    // the stamp ends, the way Acrobat and FirmaEC both do.
+                    background_color: Some(Color::new(1.0, 1.0, 1.0)),
+                    border: Some(Border {
+                        width: 0.75,
+                        color: Color::new(0.62, 0.13, 0.16),
+                    }),
                 },
             ),
             tsa_url,

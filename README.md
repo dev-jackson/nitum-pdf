@@ -79,7 +79,7 @@ cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets --locked
 cd ..
-./packaging/native/build-linux-deb.sh 0.7.2
+./packaging/native/build-linux-deb.sh 0.8.0
 ```
 
 ## Atajos

@@ -153,16 +153,15 @@ export component AppWindow inherits Window {
     // a position outright is ignored on Wayland.
     callback start-window-drag;
     changed placement-mode => {
-        if (root.placement-mode) {
-            root.placement-page = root.signature-position-set
-                ? root.signature-page
-                : max(0, root.current-page - 1);
-            root.placement-x = root.signature-position-set
-                ? root.signature-x
-                : root.signature-default-x;
-            root.placement-y = root.signature-position-set
-                ? root.signature-y
-                : root.signature-default-y;
+        if (root.placement-mode && root.signature-position-set) {
+            // Changing an existing area shows where it is now. A first placement
+            // shows nothing until the pointer moves, because there is no default
+            // position to preview — that is the point.
+            root.placement-page = root.signature-page;
+            root.placement-x = root.signature-x;
+            root.placement-y = root.signature-y;
+        } else if (root.placement-mode) {
+            root.placement-page = -1;
         }
     }
     changed scroll-page => {
@@ -815,9 +814,15 @@ export component AppWindow inherits Window {
             available-height: parent.height - 2 * Space.xl;
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
-            primary-label: root.signing-busy ? "Firmando…" : "Firmar y guardar";
+            primary-label: root.signing-busy
+                ? "Firmando…"
+                : (visible-input.checked && !root.signature-position-set)
+                    ? "Dibuja primero el área"
+                    : "Firmar y guardar";
             primary-icon: @image-url("../../data/icons/sign.svg");
-            primary-enabled: (root.identity-path != "" || root.identity-kind == 1) && !root.signing-busy;
+            primary-enabled: (root.identity-path != "" || root.identity-kind == 1)
+                && !root.signing-busy
+                && (!visible-input.checked || root.signature-position-set);
             back => { root.active-dialog = 1; }
             closed => { root.placement-mode = false; root.close-dialog(); }
             secondary-activated => { root.placement-mode = false; root.close-dialog(); }
@@ -974,7 +979,7 @@ export component AppWindow inherits Window {
                             ? "Área dibujada en la página " + (root.signature-page + 1)
                             : root.signature-position-set
                                 ? "En la página " + (root.signature-page + 1) + ", donde la colocaste"
-                                : "Esquina inferior izquierda de esta página";
+                                : "Todavía no has elegido dónde";
                         detail: root.signature-position-set
                             ? "Pulsa para dibujar otra área sobre el documento"
                             : "Pulsa y arrastra sobre el documento para dibujar el área de la firma";
