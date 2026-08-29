@@ -1581,7 +1581,11 @@ pub fn run<P: DocumentPicker + 'static>(
         let installer = Arc::clone(&installer);
         let weak = weak.clone();
         std::thread::spawn(move || {
-            let result = (|| {
+            // Installing and restarting fail for different reasons and deserve
+            // different answers. Once the new version is on disk the update has
+            // succeeded, so a restart that does not happen is an inconvenience
+            // to report — not a failure to hide behind the installer's message.
+            let outcome = (|| {
                 let package = updater.download_verified(&release)?;
                 let status_weak = weak.clone();
                 slint::invoke_from_event_loop(move || {
@@ -1590,13 +1594,31 @@ pub fn run<P: DocumentPicker + 'static>(
                     }
                 })?;
                 installer.install(&package)?;
-                installer.relaunch(document.as_deref())?;
-                Ok::<_, anyhow::Error>(())
+                Ok::<_, anyhow::Error>(installer.relaunch(document.as_deref()))
             })();
-            let _ = slint::invoke_from_event_loop(move || match result {
-                Ok(()) => {
+
+            let _ = slint::invoke_from_event_loop(move || match outcome {
+                // Installed and restarting: the window closes and the new one
+                // takes over.
+                Ok(Ok(())) => {
                     let _ = slint::quit_event_loop();
                 }
+                // Installed, but this process could not start the new one. The
+                // person is already up to date and only has to open it again.
+                Ok(Err(error)) => {
+                    if let Some(ui) = weak.upgrade() {
+                        ui.set_update_busy(false);
+                        ui.set_update_available(false);
+                        ui.set_update_status(
+                            format!(
+                                "La actualización se instaló, pero no pudimos reiniciar Nitum PDF. \
+                                 Ciérralo y vuelve a abrirlo para usar la versión nueva. ({error})"
+                            )
+                            .into(),
+                        );
+                    }
+                }
+                // Nothing was installed.
                 Err(error) => {
                     if let Some(ui) = weak.upgrade() {
                         ui.set_update_busy(false);
