@@ -339,6 +339,11 @@ impl PdfSigner {
                 fd.set("Type", Object::Name(b"Font".to_vec()));
                 fd.set("Subtype", Object::Name(b"Type1".to_vec()));
                 fd.set("BaseFont", Object::Name(pdf_font_name.as_bytes().to_vec()));
+                // Without this the viewer falls back to the font's built-in
+                // StandardEncoding, which has no glyph at 0xF3 and friends, so
+                // every accented letter was drawn as a blank. The appearance
+                // stream writes WinAnsi bytes, and this is what says so.
+                fd.set("Encoding", Object::Name(b"WinAnsiEncoding".to_vec()));
                 let font_id = doc.add_object(Object::Dictionary(fd));
                 appearance_object_ids.push(font_id);
                 font_dict.set(res_name.as_bytes(), Object::Reference(font_id));

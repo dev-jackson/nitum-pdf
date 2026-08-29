@@ -29,6 +29,9 @@ tempfile = "3.23"
 tokio = { version = "1.53", features = ["rt-multi-thread"] }
 underskrift = { path = "vendor/underskrift" }
 zeroize = "1.9"
+# Local civil time for the visible signature stamp, with a real time zone
+# database: the stamp is read by people, in their own local time.
+jiff = "0.2"
 x509-cert = "0.2"
 
 [build-dependencies]
