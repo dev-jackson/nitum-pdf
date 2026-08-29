@@ -140,7 +140,9 @@ impl SignaturePlacement {
 /// you place it is the size you get.
 pub const SIGNATURE_WIDTH_POINTS: f32 = 220.0;
 pub const SIGNATURE_HEIGHT_POINTS: f32 = 72.0;
-/// Margin from the page corner when nobody picks a spot.
+/// Where the preview box first appears when someone reopens an area they have
+/// not drawn yet. It is not a fallback placement: a visible signature is drawn
+/// by the person or it is not drawn at all.
 pub const SIGNATURE_DEFAULT_MARGIN_POINTS: f32 = 36.0;
 /// Below this a drag is a click, not a box: a signature that small is unreadable.
 pub const SIGNATURE_MIN_WIDTH_POINTS: f32 = 60.0;

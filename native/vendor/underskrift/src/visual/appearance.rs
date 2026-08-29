@@ -769,7 +769,9 @@ fn render_standard14_text(
         let y = start_y - i as f32 * line_height;
 
         write_fmt(stream, &format!("{:.2} {:.2} Td", x, y));
-        write_fmt(stream, &format!("{} Tj", encode_pdf_text(&line.text)));
+        // Written as bytes: the literal string is WinAnsi-encoded, not UTF-8.
+        stream.extend_from_slice(&encode_pdf_text(&line.text));
+        stream.extend_from_slice(b" Tj\n");
 
         if i + 1 < config.lines.len() {
             write_fmt(stream, &format!("{:.2} {:.2} Td", -x, -y));

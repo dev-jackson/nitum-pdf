@@ -71,6 +71,9 @@ jobs:
           done
           NITUM_TEST_P12="$RUNNER_TEMP/identity.p12" NITUM_TEST_P12_PASSWORD=prueba-segura NITUM_TEST_SUCCESSIVE=1 cargo test --manifest-path native/Cargo.toml --test signing_adapter --locked -- --ignored
           NITUM_TEST_P12="$RUNNER_TEMP/identity.p12" NITUM_TEST_P12_PASSWORD=prueba-segura NITUM_TEST_CERTIFICATION=1 cargo test --manifest-path native/Cargo.toml --test signing_adapter --locked -- --ignored
+          # The stamp has to carry the signer, the issuer and the date, with
+          # accented text encoded so a viewer can actually draw it.
+          NITUM_TEST_P12="$RUNNER_TEMP/identity.p12" NITUM_TEST_P12_PASSWORD=prueba-segura cargo test --manifest-path native/Cargo.toml --test signature_appearance --locked -- --ignored
       - name: Provision a software PKCS11 token
         run: |
           mkdir -p "$RUNNER_TEMP/tokens"

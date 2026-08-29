@@ -1234,33 +1234,30 @@ pub fn run<P: DocumentPicker + 'static>(
                     ui.set_signing_status("No se pudo calcular la posición de la firma.".into());
                     return;
                 };
-                Some(
-                    requested_position.map_or(
-                        SignaturePlacement {
-                            page_index: selected_page,
-                            left: SIGNATURE_DEFAULT_MARGIN_POINTS
-                                .min((dimensions.width_points - SIGNATURE_WIDTH_POINTS).max(0.0)),
-                            bottom: SIGNATURE_DEFAULT_MARGIN_POINTS
-                                .min((dimensions.height_points - SIGNATURE_HEIGHT_POINTS).max(0.0)),
-                            width: SIGNATURE_WIDTH_POINTS.min(dimensions.width_points.max(1.0)),
-                            height: SIGNATURE_HEIGHT_POINTS.min(dimensions.height_points.max(1.0)),
-                        },
-                        |(_, start, end)| match end {
-                            Some(end) => SignaturePlacement::from_normalized_rect(
-                                selected_page,
-                                dimensions,
-                                start,
-                                end,
-                            ),
-                            None => SignaturePlacement::from_normalized_point(
-                                selected_page,
-                                dimensions,
-                                start.0,
-                                start.1,
-                            ),
-                        },
+                // No fallback corner: a visible signature is placed by the
+                // person or it is not placed at all. Guessing a corner put
+                // stamps on top of content nobody wanted covered.
+                let Some((_, start, end)) = requested_position else {
+                    ui.set_signing_busy(false);
+                    ui.set_signing_status(
+                        "Dibuja el área de la firma sobre el documento antes de firmar.".into(),
+                    );
+                    return;
+                };
+                Some(match end {
+                    Some(end) => SignaturePlacement::from_normalized_rect(
+                        selected_page,
+                        dimensions,
+                        start,
+                        end,
                     ),
-                )
+                    None => SignaturePlacement::from_normalized_point(
+                        selected_page,
+                        dimensions,
+                        start.0,
+                        start.1,
+                    ),
+                })
             } else {
                 None
             };
@@ -1350,8 +1347,17 @@ pub fn run<P: DocumentPicker + 'static>(
     });
     let weak = ui.as_weak();
     ui.on_choose_signing(move || {
-        if let Some(ui) = weak.upgrade() {
-            ui.set_active_dialog(2)
+        let Some(ui) = weak.upgrade() else { return };
+        // Drawing the area comes first, the way Acrobat and FirmaEC both ask for
+        // it. Nothing is placed in a default corner on the person's behalf: they
+        // say where the signature goes, and only then are they asked for the
+        // details. Once an area exists, choosing to sign again returns to the
+        // details rather than making them draw it twice.
+        if ui.get_signature_position_set() {
+            ui.set_active_dialog(2);
+        } else {
+            ui.set_active_dialog(0);
+            ui.set_placement_mode(true);
         }
     });
 

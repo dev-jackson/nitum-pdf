@@ -461,29 +461,117 @@ pub fn build_tounicode_cmap(font_name: &str, char_to_cid: &[(char, u16)]) -> Vec
 
 // ── Standard 14 font support ────────────────────────────────────────
 
-/// Encode a string for use in a PDF text string (Tj operator).
+/// Encode a string as a PDF literal string for the `Tj` operator.
 ///
-/// This handles basic escaping for the PDF literal string format: `(text)`
-/// Characters that need escaping: `(`, `)`, `\`
-/// Non-Latin characters outside WinAnsiEncoding are replaced with `?`.
-pub fn encode_pdf_text(text: &str) -> String {
-    let mut result = String::with_capacity(text.len() + 2);
-    result.push('(');
+/// Returns **bytes**, not a `String`, and that is the whole point. The Standard
+/// 14 fonts are shown with WinAnsiEncoding, which is single-byte, whereas a
+/// Rust `String` serialises as UTF-8. Building the literal as text therefore
+/// wrote `ó` as the two bytes `C3 B3`, and a WinAnsi viewer drew them as two
+/// separate characters: `Aprobación` came out as `AprobaciÃ³n`. Every accented
+/// letter in Spanish hit this.
+///
+/// WinAnsiEncoding agrees with Latin-1 across `A0`–`FF`, which covers the
+/// accented letters, `ñ`, `ü`, `¿` and `¡`. A few typographic characters live in
+/// `80`–`9F` and are mapped explicitly. Anything else becomes `?`, since the
+/// font has no glyph for it.
+pub fn encode_pdf_text(text: &str) -> Vec<u8> {
+    let mut result = Vec::with_capacity(text.len() + 2);
+    result.push(b'(');
     for ch in text.chars() {
-        let code = ch as u32;
-        if code > 255 {
-            result.push('?'); // replacement for non-Latin
-        } else {
-            match ch {
-                '(' => result.push_str("\\("),
-                ')' => result.push_str("\\)"),
-                '\\' => result.push_str("\\\\"),
-                _ => result.push(ch),
+        let byte = match ch {
+            // Escapes required by the literal string syntax.
+            '(' => {
+                result.extend_from_slice(b"\\(");
+                continue;
             }
-        }
+            ')' => {
+                result.extend_from_slice(b"\\)");
+                continue;
+            }
+            '\\' => {
+                result.extend_from_slice(b"\\\\");
+                continue;
+            }
+            // WinAnsiEncoding's own additions in the 80-9F range.
+            '\u{20AC}' => 0x80, // €
+            '\u{201A}' => 0x82, // ‚
+            '\u{0192}' => 0x83, // ƒ
+            '\u{201E}' => 0x84, // „
+            '\u{2026}' => 0x85, // …
+            '\u{2020}' => 0x86, // †
+            '\u{2021}' => 0x87, // ‡
+            '\u{02C6}' => 0x88, // ˆ
+            '\u{2030}' => 0x89, // ‰
+            '\u{0160}' => 0x8A, // Š
+            '\u{2039}' => 0x8B, // ‹
+            '\u{0152}' => 0x8C, // Œ
+            '\u{017D}' => 0x8E, // Ž
+            '\u{2018}' => 0x91, // '
+            '\u{2019}' => 0x92, // '
+            '\u{201C}' => 0x93, // "
+            '\u{201D}' => 0x94, // "
+            '\u{2022}' => 0x95, // •
+            '\u{2013}' => 0x96, // –
+            '\u{2014}' => 0x97, // —
+            '\u{02DC}' => 0x98, // ˜
+            '\u{2122}' => 0x99, // ™
+            '\u{0161}' => 0x9A, // š
+            '\u{203A}' => 0x9B, // ›
+            '\u{0153}' => 0x9C, // œ
+            '\u{017E}' => 0x9E, // ž
+            '\u{0178}' => 0x9F, // Ÿ
+            // Latin-1, which WinAnsiEncoding matches from A0 upwards.
+            _ => match u32::from(ch) {
+                code @ 0x20..=0x7E | code @ 0xA0..=0xFF => code as u8,
+                _ => b'?',
+            },
+        };
+        result.push(byte);
     }
-    result.push(')');
+    result.push(b')');
     result
+}
+
+#[cfg(test)]
+mod winansi_tests {
+    use super::encode_pdf_text;
+
+    #[test]
+    fn spanish_accents_are_single_winansi_bytes() {
+        // The Standard 14 fonts are shown with WinAnsiEncoding. Emitting UTF-8
+        // wrote `ó` as C3 B3, and the viewer drew two characters instead of one,
+        // so "Aprobación" appeared as "AprobaciÃ³n".
+        let encoded = encode_pdf_text("Aprobación");
+        assert_eq!(
+            encoded,
+            b"(Aprobaci\xF3n)".to_vec(),
+            "each accented letter must be exactly one WinAnsi byte"
+        );
+
+        // The letters Spanish actually needs, all of them Latin-1.
+        assert_eq!(
+            encode_pdf_text("ñÑüÜ¿¡"),
+            b"(\xF1\xD1\xFC\xDC\xBF\xA1)".to_vec()
+        );
+        assert_eq!(
+            encode_pdf_text("áéíóúÁÉÍÓÚ"),
+            b"(\xE1\xE9\xED\xF3\xFA\xC1\xC9\xCD\xD3\xDA)".to_vec()
+        );
+    }
+
+    #[test]
+    fn literal_string_syntax_is_escaped() {
+        assert_eq!(encode_pdf_text("a(b)c\\d"), b"(a\\(b\\)c\\\\d)".to_vec());
+    }
+
+    #[test]
+    fn characters_the_font_cannot_draw_become_a_question_mark() {
+        // Outside WinAnsiEncoding there is no glyph, so a placeholder is the
+        // only honest option.
+        assert_eq!(encode_pdf_text("日本"), b"(??)".to_vec());
+        // But WinAnsi's own additions keep their own byte.
+        assert_eq!(encode_pdf_text("€“”–"), b"(\x80\x93\x94\x96)".to_vec());
+    }
 }
 
 // Helvetica character widths (WinAnsiEncoding, indices 0-255).
@@ -650,17 +738,17 @@ mod tests {
 
     #[test]
     fn test_encode_pdf_text_simple() {
-        assert_eq!(encode_pdf_text("Hello"), "(Hello)");
+        assert_eq!(encode_pdf_text("Hello"), b"(Hello)".to_vec());
     }
 
     #[test]
     fn test_encode_pdf_text_escaping() {
-        assert_eq!(encode_pdf_text("a(b)c\\d"), "(a\\(b\\)c\\\\d)");
+        assert_eq!(encode_pdf_text("a(b)c\\d"), b"(a\\(b\\)c\\\\d)".to_vec());
     }
 
     #[test]
     fn test_encode_pdf_text_non_latin() {
-        assert_eq!(encode_pdf_text("日本語"), "(???)");
+        assert_eq!(encode_pdf_text("日本語"), b"(???)".to_vec());
     }
 
     #[test]

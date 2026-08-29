@@ -287,6 +287,21 @@ fn light_dark_and_signature_center_render_headlessly() {
     save_if_requested("certification-flow-light.png", &certification_light);
     ui.set_certification_permission(-1);
 
+    // Nothing placed yet: the primary action says what is missing instead of
+    // dropping the signature into a corner nobody chose.
+    ui.set_signature_position_set(false);
+    ui.set_signature_area_set(false);
+    ui.set_active_dialog(2);
+    let _transition_frame = ui.window().take_snapshot().unwrap();
+    let unplaced = ui.window().take_snapshot().unwrap();
+    assert_accessible_action(
+        &ui,
+        "Dibuja primero el área",
+        "signing flow without an area",
+    );
+    save_if_requested("signing-without-area-light.png", &unplaced);
+    ui.set_signature_position_set(true);
+
     ui.set_active_dialog(7);
     let _transition_frame = ui.window().take_snapshot().unwrap();
     let appearances_light = ui.window().take_snapshot().unwrap();
