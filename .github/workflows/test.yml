@@ -62,6 +62,14 @@ jobs:
           cargo test --manifest-path native/Cargo.toml --test pdfium_adapter damaged_pdf_is_rejected_cleanly --locked -- --ignored
           qpdf --encrypt secreto secreto 256 -- native/tests/fixtures/sample.pdf "$RUNNER_TEMP/encrypted.pdf"
           NITUM_TEST_ENCRYPTED_PDF="$RUNNER_TEMP/encrypted.pdf" NITUM_TEST_PDF_PASSWORD=secreto cargo test --manifest-path native/Cargo.toml --test pdfium_adapter encrypted_pdf_requires_and_accepts_its_password --locked -- --ignored
+      - name: Prove the visual identity survives a release build
+        run: |
+          # The font is embedded by the compiler, so this has to run against a
+          # real optimised binary: referencing it by path instead would look
+          # right here and fall back to a system font on every other machine.
+          cargo build --manifest-path native/Cargo.toml --release --locked
+          cargo test --manifest-path native/Cargo.toml --test visual_identity --locked
+
       - name: Test modern PKCS12 and implemented PAdES levels
         run: |
           openssl req -x509 -newkey rsa:2048 -keyout "$RUNNER_TEMP/key.pem" -out "$RUNNER_TEMP/cert.pem" -days 2 -nodes -subj '/CN=Nitum CI/O=Nitum'

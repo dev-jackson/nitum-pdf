@@ -33,6 +33,12 @@ export component ActionButton inherits Rectangle {
     background: !root.enabled ? (root.tone == ButtonTone.ghost ? transparent : Theme.raised)
         : touch.pressed ? (root.tone == ButtonTone.primary ? Theme.accent-pressed : root.hovered)
         : touch.has-hover ? root.hovered : root.base;
+    // A press pushes the control down by a hair. It reads as a physical button
+    // rather than a colour swap, and because it animates geometry rather than
+    // the fill it cannot repaint a stale colour the way a background animation
+    // did on rebuilt rows.
+    transform-scale: touch.pressed && root.enabled ? 0.97 : 1.0;
+    animate transform-scale { duration: Motion.instant; easing: ease-out; }
     // No `animate background`: see the note on ChoiceRow.
     border-width: focus.has-focus ? 2px : (root.filled && root.enabled) ? 0px : 1px;
     border-color: focus.has-focus ? ((root.filled && root.enabled) ? Theme.text-on-accent : Theme.focus-ring)
@@ -98,7 +104,8 @@ export component IconAction inherits Rectangle {
         : transparent;
     border-width: focus.has-focus ? 2px : 0px;
     border-color: Theme.focus-ring;
-    animate background { duration: Motion.instant; }
+    transform-scale: touch.pressed && root.enabled ? 0.92 : 1.0;
+    animate transform-scale { duration: Motion.instant; easing: ease-out; }
 
     accessible-role: button;
     accessible-label: root.hint;
@@ -328,7 +335,7 @@ export component Dialog inherits Rectangle {
     property <length> footer-height: root.primary-label == "" && root.secondary-label == "" && !root.show-back ? 0px : 60px;
 
     border-radius: Radius.lg;
-    background: Theme.surface;
+    background: Theme.surface-fill;
     border-width: 1px;
     border-color: Theme.border;
     drop-shadow-blur: 32px;
