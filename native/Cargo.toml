@@ -1,6 +1,6 @@
 [package]
 name = "nitum-pdf"
-version = "0.8.1"
+version = "0.9.0"
 edition = "2024"
 license = "MIT"
 description = "Nitum PDF native desktop interface"
@@ -33,6 +33,7 @@ zeroize = "1.9"
 # database: the stamp is read by people, in their own local time.
 jiff = "0.2"
 x509-cert = "0.2"
+qrcode = { version = "0.14.1", default-features = false, features = ["image"] }
 
 [build-dependencies]
 slint-build = "1.17.1"
