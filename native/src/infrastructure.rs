@@ -1,7 +1,7 @@
 use crate::{
     application::{
         AppearanceStore, DocumentPicker, HardwareSignRequest, HardwareTokenProvider, IdentityStore,
-        OpenPdf, PdfEngine, PdfSigning, SignRequest, TextClipboard,
+        OpenPdf, PdfEngine, PdfSigning, SignRequest, TextClipboard, UpdatePreferences,
     },
     domain::{
         CertificationPermission, DocumentRef, HardwareToken, PadesLevel, PageBitmap, PageSize,
@@ -645,6 +645,88 @@ fn appearance_qr(lines: &[TextLine]) -> Option<Vec<u8>> {
         .write_to(&mut png, SourceImageFormat::Png)
         .ok()?;
     Some(png.into_inner())
+}
+
+/// What the person has decided about updates, kept between runs.
+///
+/// Two settings, because they answer different questions. "Check automatically"
+/// is whether we look at all. The dismissed version is which release they have
+/// already said no to — without it the same update is offered on every launch,
+/// which is the nagging that makes people stop reading update prompts.
+///
+/// The file is two plain lines so it can be read and corrected by hand.
+pub struct NativeUpdatePreferences {
+    path: PathBuf,
+}
+
+impl NativeUpdatePreferences {
+    pub fn new() -> Result<Self> {
+        let base = directories::BaseDirs::new().context("no se encontró la carpeta de datos")?;
+        #[cfg(target_os = "linux")]
+        let directory = base.config_dir().join("pw-view-pdf");
+        #[cfg(not(target_os = "linux"))]
+        let directory = base.config_dir().join("Nitum PDF");
+        Ok(Self {
+            path: directory.join("updates.conf"),
+        })
+    }
+
+    pub fn at(path: PathBuf) -> Self {
+        Self { path }
+    }
+
+    fn read(&self) -> (bool, Option<String>) {
+        let Ok(text) = fs::read_to_string(&self.path) else {
+            // Checking is on until someone turns it off: a signing tool that
+            // silently falls behind on security fixes is worse than one that
+            // mentions an update once per version.
+            return (true, None);
+        };
+        let mut automatic = true;
+        let mut dismissed = None;
+        for line in text.lines() {
+            match line.split_once('=') {
+                Some(("automatic", value)) => automatic = value.trim() != "false",
+                Some(("dismissed", value)) if !value.trim().is_empty() => {
+                    dismissed = Some(value.trim().to_owned());
+                }
+                _ => {}
+            }
+        }
+        (automatic, dismissed)
+    }
+
+    fn write(&self, automatic: bool, dismissed: Option<&str>) -> Result<()> {
+        if let Some(parent) = self.path.parent() {
+            fs::create_dir_all(parent).context("no se pudo crear la carpeta de configuración")?;
+        }
+        let contents = format!(
+            "automatic={}\ndismissed={}\n",
+            automatic,
+            dismissed.unwrap_or_default()
+        );
+        fs::write(&self.path, contents).context("no se pudo guardar la preferencia")
+    }
+}
+
+impl UpdatePreferences for NativeUpdatePreferences {
+    fn automatic(&self) -> bool {
+        self.read().0
+    }
+
+    fn set_automatic(&self, automatic: bool) -> Result<()> {
+        let dismissed = self.read().1;
+        self.write(automatic, dismissed.as_deref())
+    }
+
+    fn is_dismissed(&self, version: &str) -> bool {
+        self.read().1.as_deref() == Some(version)
+    }
+
+    fn dismiss(&self, version: &str) -> Result<()> {
+        let automatic = self.read().0;
+        self.write(automatic, Some(version))
+    }
 }
 
 pub struct NativePadesSigning {
