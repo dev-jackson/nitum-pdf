@@ -83,6 +83,16 @@ pub trait UpdateService: Send + Sync {
     fn download_verified(&self, release: &AppRelease) -> Result<std::path::PathBuf>;
 }
 
+/// Remembers what the person decided about updates, so the answer sticks.
+pub trait UpdatePreferences: Send + Sync {
+    /// Whether to look for updates at all.
+    fn automatic(&self) -> bool;
+    fn set_automatic(&self, automatic: bool) -> Result<()>;
+    /// Whether this exact version has already been turned down.
+    fn is_dismissed(&self, version: &str) -> bool;
+    fn dismiss(&self, version: &str) -> Result<()>;
+}
+
 pub trait UpdateInstaller: Send + Sync {
     fn install(&self, package: &Path) -> Result<()>;
     fn relaunch(&self, document: Option<&Path>) -> Result<()>;

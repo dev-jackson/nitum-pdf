@@ -6,6 +6,7 @@ use nitum_pdf::{
     infrastructure::{
         NativeAppearanceStore, NativeDocumentPicker, NativeHardwareTokenProvider,
         NativeIdentityStore, NativePadesSigning, NativePdfEngine, NativeTextClipboard,
+        NativeUpdatePreferences,
         updater::{GithubUpdateService, NativeUpdateInstaller},
     },
     presentation::{self, PresentationServices},
@@ -27,6 +28,7 @@ fn main() -> Result<()> {
             token_provider: Arc::new(NativeHardwareTokenProvider),
             update_service: Arc::new(GithubUpdateService::new()?),
             update_installer: Arc::new(NativeUpdateInstaller),
+            update_preferences: Arc::new(NativeUpdatePreferences::new()?),
         },
         open_at_startup,
     )

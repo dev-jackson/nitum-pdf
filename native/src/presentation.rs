@@ -3,7 +3,7 @@ use crate::{
     application::{
         AppearanceStore, DocumentPicker, HardwareSignRequest, HardwareTokenProvider, IdentityStore,
         OpenDocument, OpenPdf, PdfEngine, PdfSigning, SignRequest, TextClipboard, UpdateInstaller,
-        UpdateService, ViewerState,
+        UpdatePreferences, UpdateService, ViewerState,
     },
     domain::{
         AppRelease, CertificationPermission, HardwareToken, PadesLevel, PageBitmap,
@@ -39,14 +39,21 @@ pub struct PresentationServices {
     pub token_provider: Arc<dyn HardwareTokenProvider>,
     pub update_service: Arc<dyn UpdateService>,
     pub update_installer: Arc<dyn UpdateInstaller>,
+    pub update_preferences: Arc<dyn UpdatePreferences>,
 }
 
 fn spawn_update_check(
     service: Arc<dyn UpdateService>,
     available: AvailableRelease,
+    preferences: Arc<dyn UpdatePreferences>,
     weak: Weak<AppWindow>,
     interactive: bool,
 ) {
+    // A background check runs only if the person left automatic checks on.
+    // Asking explicitly always checks, whatever the setting says.
+    if !interactive && !preferences.automatic() {
+        return;
+    }
     if interactive && let Some(ui) = weak.upgrade() {
         ui.set_active_dialog(4);
         ui.set_update_checking(true);
@@ -59,8 +66,12 @@ fn spawn_update_check(
             ui.set_update_checking(false);
             match result {
                 Ok(Some(release)) => {
+                    // Offering a version that has already been turned down is
+                    // what teaches people to ignore update prompts. It is kept
+                    // available in the toolbar, just not announced again.
+                    let dismissed = !interactive && preferences.is_dismissed(&release.version);
                     ui.set_update_version(release.version.as_str().into());
-                    ui.set_update_available(true);
+                    ui.set_update_available(!dismissed);
                     ui.set_update_status(
                         format!("La versión {} está lista para descargar.", release.version).into(),
                     );
@@ -448,6 +459,7 @@ pub fn run<P: DocumentPicker + 'static>(
         token_provider,
         update_service,
         update_installer,
+        update_preferences,
     } = services;
     announce_application_id();
     let ui = AppWindow::new()?;
@@ -1551,15 +1563,42 @@ pub fn run<P: DocumentPicker + 'static>(
 
     let checker = Arc::clone(&update_service);
     let releases_for_check = Arc::clone(&available_release);
+    let preferences_for_check = Arc::clone(&update_preferences);
     let weak = ui.as_weak();
     ui.on_check_updates(move || {
         spawn_update_check(
             Arc::clone(&checker),
             Arc::clone(&releases_for_check),
+            Arc::clone(&preferences_for_check),
             weak.clone(),
             true,
         );
     });
+
+    // "Ahora no" is an answer, and it is remembered: this exact version stops
+    // being announced, while a newer one still will be.
+    let preferences_for_dismiss = Arc::clone(&update_preferences);
+    let weak = ui.as_weak();
+    ui.on_dismiss_update(move || {
+        let Some(ui) = weak.upgrade() else { return };
+        let version = ui.get_update_version().to_string();
+        if !version.is_empty() {
+            let _ = preferences_for_dismiss.dismiss(&version);
+        }
+        ui.set_update_available(false);
+        ui.set_active_dialog(0);
+    });
+
+    let preferences_for_toggle = Arc::clone(&update_preferences);
+    let weak = ui.as_weak();
+    ui.on_set_automatic_updates(move |automatic| {
+        let _ = preferences_for_toggle.set_automatic(automatic);
+        if let Some(ui) = weak.upgrade() {
+            ui.set_automatic_updates(automatic);
+        }
+    });
+
+    ui.set_automatic_updates(update_preferences.automatic());
 
     let release_for_install = Arc::clone(&available_release);
     let updater = Arc::clone(&update_service);
@@ -1632,6 +1671,7 @@ pub fn run<P: DocumentPicker + 'static>(
     spawn_update_check(
         Arc::clone(&update_service),
         Arc::clone(&available_release),
+        Arc::clone(&update_preferences),
         ui.as_weak(),
         false,
     );

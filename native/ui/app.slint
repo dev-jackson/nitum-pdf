@@ -1,3 +1,12 @@
+// Geist, under the SIL Open Font License; the licence travels with the files in
+// data/fonts. Embedding the typeface is what makes the product look like itself
+// on every machine rather than like whatever sans-serif the system happens to
+// have installed.
+import "../../data/fonts/Geist-Regular.ttf";
+import "../../data/fonts/Geist-Medium.ttf";
+import "../../data/fonts/Geist-SemiBold.ttf";
+import "../../data/fonts/Geist-Bold.ttf";
+
 import { Button, LineEdit, ListView, ProgressIndicator, ScrollView } from "std-widgets.slint";
 import { Palette as SystemPalette } from "std-widgets.slint";
 import { Theme, Space, Radius, Type, Motion } from "theme.slint";
@@ -28,6 +37,7 @@ export component AppWindow inherits Window {
     // toolbar already shows, and it never matched the application's own theme.
     no-frame: true;
     resize-border-width: 6px;
+    default-font-family: "Geist";
     preferred-width: 1180px; preferred-height: 820px;
     min-width: 720px; min-height: 560px;
     background: Theme.canvas;
@@ -66,6 +76,7 @@ export component AppWindow inherits Window {
     in-out property <string> current-version: "";
     in-out property <string> update-version: "";
     in-out property <bool> update-busy: false;
+    in-out property <bool> automatic-updates: true;
     in-out property <string> update-status: "";
     in-out property <bool> verification-busy: false;
     in-out property <bool> verification-success: false;
@@ -140,6 +151,8 @@ export component AppWindow inherits Window {
     callback cancel-unlock;
     callback check-updates;
     callback install-update;
+    callback dismiss-update;
+    callback set-automatic-updates(bool);
     callback verify-signatures;
     callback select-appearance;
     callback show-appearance-library;
@@ -1113,7 +1126,9 @@ export component AppWindow inherits Window {
             primary-enabled: !root.update-busy && !root.update-checking;
             secondary-label: root.update-available ? "Ahora no" : "Cerrar";
             closed => { root.close-dialog(); }
-            secondary-activated => { root.close-dialog(); }
+            secondary-activated => {
+                if (root.update-available) { root.dismiss-update(); } else { root.close-dialog(); }
+            }
             primary-activated => { root.install-update(); }
             if root.update-checking: ProgressIndicator {
                 indeterminate: true;
@@ -1131,6 +1146,15 @@ export component AppWindow inherits Window {
                 color: Theme.text-secondary;
                 font-size: Type.small;
                 wrap: word-wrap;
+            }
+
+            // Turning this off stops the background check entirely, so the
+            // application never brings updates up on its own again.
+            Toggle {
+                label: "Avisarme de versiones nuevas";
+                help: "Si dices \"Ahora no\", esa versión no se vuelve a anunciar.";
+                checked: root.automatic-updates;
+                toggled => { root.set-automatic-updates(self.checked); }
             }
         }
 
