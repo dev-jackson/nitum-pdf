@@ -449,7 +449,7 @@ export component AppWindow inherits Window {
                                         Text {
                                             text: root.placement-dragging
                                                 ? "Suelta para fijar el área"
-                                                : "Tu firma irá aquí";
+                                                : "Arrastra para elegir el tamaño";
                                             color: Theme.accent;
                                             font-size: Type.small;
                                             font-weight: Type.semibold;
@@ -816,18 +816,18 @@ export component AppWindow inherits Window {
             y: (parent.height - self.height) / 2;
             primary-label: root.signing-busy
                 ? "Firmando…"
-                : (visible-input.checked && !root.signature-position-set)
+                : !root.signature-position-set
                     ? "Dibuja primero el área"
                     : "Firmar y guardar";
             primary-icon: @image-url("../../data/icons/sign.svg");
             primary-enabled: (root.identity-path != "" || root.identity-kind == 1)
                 && !root.signing-busy
-                && (!visible-input.checked || root.signature-position-set);
+                && root.signature-position-set;
             back => { root.active-dialog = 1; }
             closed => { root.placement-mode = false; root.close-dialog(); }
             secondary-activated => { root.placement-mode = false; root.close-dialog(); }
             primary-activated => {
-                root.sign-with-identity(secret-input.text, root.pades-level, root.certification-permission, reason-input.text, location-input.text, visible-input.checked);
+                root.sign-with-identity(secret-input.text, root.pades-level, root.certification-permission, reason-input.text, location-input.text, true);
                 secret-input.text = "";
             }
 
@@ -905,7 +905,7 @@ export component AppWindow inherits Window {
                     accessible-label: root.identity-kind == 1 ? "PIN de la tarjeta" : "Contraseña de la identidad digital";
                     accepted(value) => {
                         if (root.identity-path != "" || root.identity-kind == 1) && !root.signing-busy {
-                            root.sign-with-identity(value, root.pades-level, root.certification-permission, reason-input.text, location-input.text, visible-input.checked);
+                            root.sign-with-identity(value, root.pades-level, root.certification-permission, reason-input.text, location-input.text, true);
                             self.text = "";
                         }
                     }
@@ -913,64 +913,6 @@ export component AppWindow inherits Window {
             }
 
             Field {
-                label: "Tipo de firma";
-                VerticalLayout {
-                    spacing: Space.xs;
-                    ChoiceRow {
-                        title: "Firmar para aprobar";
-                        detail: "Otras personas podrán firmar después de ti";
-                        option: true;
-                        is-selected: root.certification-permission == -1;
-                        chosen => { root.certification-permission = -1; }
-                    }
-                    ChoiceRow {
-                        title: "Certificar el documento";
-                        detail: "Debe ser la primera firma y fija qué cambios se permiten";
-                        option: true;
-                        is-selected: root.certification-permission != -1;
-                        chosen => { root.certification-permission = 2; }
-                    }
-                }
-            }
-
-            if root.certification-permission != -1: Field {
-                label: "Cambios que seguirán permitidos";
-                VerticalLayout {
-                    spacing: Space.xs;
-                    ChoiceRow {
-                        title: "Ninguno";
-                        option: true;
-                        detail: "Cualquier cambio posterior invalida la certificación";
-                        is-selected: root.certification-permission == 1;
-                        chosen => { root.certification-permission = 1; }
-                    }
-                    ChoiceRow {
-                        title: "Rellenar formularios";
-                        option: true;
-                        detail: "Se permite completar campos y firmar";
-                        is-selected: root.certification-permission == 2;
-                        chosen => { root.certification-permission = 2; }
-                    }
-                    ChoiceRow {
-                        title: "Formularios y anotaciones";
-                        option: true;
-                        detail: "Se permite además comentar y anotar";
-                        is-selected: root.certification-permission == 3;
-                        chosen => { root.certification-permission = 3; }
-                    }
-                }
-            }
-
-            Field {
-                label: "Firma visible";
-                visible-input := Toggle {
-                    label: "Mostrar la firma sobre la página";
-                    help: "La validez la aporta el certificado; lo visible sólo ayuda a reconocerla.";
-                    checked: true;
-                }
-            }
-
-            if visible-input.checked: Field {
                 label: "Dónde va la firma";
                 VerticalLayout {
                     spacing: Space.xs;
@@ -1005,6 +947,54 @@ export component AppWindow inherits Window {
 
             Disclosure {
                 label: "Opciones avanzadas";
+            Field {
+                    label: "Tipo de firma";
+                    VerticalLayout {
+                        spacing: Space.xs;
+                        ChoiceRow {
+                            title: "Firmar para aprobar";
+                            detail: "Otras personas podrán firmar después de ti";
+                            option: true;
+                            is-selected: root.certification-permission == -1;
+                            chosen => { root.certification-permission = -1; }
+                        }
+                        ChoiceRow {
+                            title: "Certificar el documento";
+                            detail: "Debe ser la primera firma y fija qué cambios se permiten";
+                            option: true;
+                            is-selected: root.certification-permission != -1;
+                            chosen => { root.certification-permission = 2; }
+                        }
+                    }
+                }
+
+                if root.certification-permission != -1: Field {
+                    label: "Cambios que seguirán permitidos";
+                    VerticalLayout {
+                        spacing: Space.xs;
+                        ChoiceRow {
+                            title: "Ninguno";
+                            option: true;
+                            detail: "Cualquier cambio posterior invalida la certificación";
+                            is-selected: root.certification-permission == 1;
+                            chosen => { root.certification-permission = 1; }
+                        }
+                        ChoiceRow {
+                            title: "Rellenar formularios";
+                            option: true;
+                            detail: "Se permite completar campos y firmar";
+                            is-selected: root.certification-permission == 2;
+                            chosen => { root.certification-permission = 2; }
+                        }
+                        ChoiceRow {
+                            title: "Formularios y anotaciones";
+                            option: true;
+                            detail: "Se permite además comentar y anotar";
+                            is-selected: root.certification-permission == 3;
+                            chosen => { root.certification-permission = 3; }
+                        }
+                    }
+                }
                 Field {
                     label: "Validez a largo plazo";
                     VerticalLayout {
