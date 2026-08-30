@@ -106,7 +106,6 @@ export component IconAction inherits Rectangle {
     border-color: Theme.focus-ring;
     transform-scale: touch.pressed && root.enabled ? 0.92 : 1.0;
     animate transform-scale { duration: Motion.instant; easing: ease-out; }
-    animate background { duration: Motion.instant; }
 
     accessible-role: button;
     accessible-label: root.hint;
