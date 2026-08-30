@@ -621,6 +621,32 @@ fn appearance_lines(
     lines
 }
 
+/// A QR code carrying the same facts the stamp prints, as a PNG.
+///
+/// It is a convenience for reading the stamp with a phone, and nothing more.
+/// Scanning it does not verify anything: it repeats what is printed beside it,
+/// which a forger could print too. Only checking the document's signature
+/// establishes validity, and the wording in the verification dialog says so.
+/// Ecuador's own guidance for FirmaEC makes the same point about its QR.
+fn appearance_qr(lines: &[TextLine]) -> Option<Vec<u8>> {
+    let payload = lines
+        .iter()
+        .map(|line| line.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let code = qrcode::QrCode::new(payload.as_bytes()).ok()?;
+    let image = code
+        .render::<image::Luma<u8>>()
+        .quiet_zone(true)
+        .min_dimensions(240, 240)
+        .build();
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageLuma8(image)
+        .write_to(&mut png, SourceImageFormat::Png)
+        .ok()?;
+    Some(png.into_inner())
+}
+
 pub struct NativePadesSigning {
     runtime: tokio::runtime::Runtime,
     trust_stores: TrustStoreSet,
@@ -981,9 +1007,21 @@ impl NativePadesSigning {
                 arrangement: Arrangement::ImageLeftTextRight,
             })
         } else {
-            request
-                .placement
-                .map(|_| SignatureLayout::TextOnly(signature_text))
+            request.placement.map(|_| {
+                match appearance_qr(&signature_text.lines) {
+                    Some(data) => SignatureLayout::ImageAndText {
+                        image: ImageConfig {
+                            data,
+                            format: ImageFormat::Png,
+                            scale: ImageScale::FitPreserveAspect,
+                        },
+                        text: signature_text,
+                        arrangement: Arrangement::ImageLeftTextRight,
+                    },
+                    // A stamp without its QR still says who signed and when.
+                    None => SignatureLayout::TextOnly(signature_text),
+                }
+            })
         };
         let options = SigningOptions {
             pades_level,
